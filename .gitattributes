@@ -1,0 +1,12 @@
+# Normalize text to LF in the repo and on checkout
+* text=auto eol=lf
+
+# Windows scripts and the text shipped in release zips need CRLF
+*.cmd text eol=crlf
+*.bat text eol=crlf
+release/*.txt text eol=crlf
+
+# Binary
+*.png binary
+*.dll binary
+*.exe binary
