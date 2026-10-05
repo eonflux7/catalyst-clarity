@@ -1,4 +1,4 @@
-# Catalyst Clarity
+<p align="center"><img src=".github/banner.png" alt="Catalyst Clarity" width="100%"></p>
 
 NVIDIA DLSS for **Mirror's Edge Catalyst** (PC, Steam). Catalyst Clarity replaces the game's TAA with DLSS
 Super Resolution / DLAA and runs motion blur, tonemapping and the rest of post-processing at your output
