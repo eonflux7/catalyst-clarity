@@ -84,6 +84,7 @@ add_library(catalyst_clarity SHARED
     src/renderer/render_scale.cpp
     src/renderer/taa.cpp
     src/upscaler/dlss.cpp
+    src/ui/input.cpp
     src/ui/overlay.cpp)
 set_target_properties(catalyst_clarity PROPERTIES OUTPUT_NAME version)
 target_include_directories(catalyst_clarity PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${DLSS_SDK_DIR}/include)

@@ -17,7 +17,8 @@ It's a drop-in `version.dll` that hooks the game in memory. No game files are mo
 - **Texture LOD bias** while rendering below output size, so textures keep output-resolution detail.
 - Optional **RCAS sharpening**.
 - **OptiScaler** compatible: use FSR 3.1 or XeSS through OptiScaler instead of DLSS.
-- In-game overlay (**F8**) with all settings, saved to `catalyst_clarity.ini`.
+- In-game settings menu (**F8**), usable during gameplay and in menus, saved to `catalyst_clarity.ini`.
+  **F3** opens a debug window for developers and bug reports.
 
 ## Requirements
 
@@ -33,14 +34,14 @@ It's a drop-in `version.dll` that hooks the game in memory. No game files are mo
 1. Download `catalyst-clarity-<version>.zip` from [Releases](../../releases).
 2. Extract it into the game folder, next to `MirrorsEdgeCatalyst.exe`
    (for example `C:\Program Files (x86)\Steam\steamapps\common\Mirrors Edge Catalyst`).
-3. Start the game. DLSS Quality is on by default. Press **F8** for the overlay.
+3. Start the game. DLSS Quality is on by default. Press **F8** for the settings menu.
 
 To uninstall, delete `version.dll`, `nvngx_dlss.dll`, `catalyst_clarity.ini`, `catalyst_clarity.log`,
 `catalyst_clarity_README.txt` and the `catalyst_clarity_licenses` folder.
 
 ## Settings
 
-The overlay (F8) changes everything live. The settings are saved in `catalyst_clarity.ini` next to the game exe:
+The settings menu (F8) changes everything live. The settings are saved in `catalyst_clarity.ini` next to the game exe:
 
 | Section | Key | Values |
 |---|---|---|
@@ -48,7 +49,8 @@ The overlay (F8) changes everything live. The settings are saved in `catalyst_cl
 | `[dlss]` | `quality_mode` | `0` follow the game's Resolution scale slider, `1` DLAA, `2` Quality (default), `3` Balanced, `4` Performance, `5` Ultra Performance |
 | `[dlss]` | `preset` | `0` DLSS default, `10`-`13` presets J-M |
 | `[dlss]` | `sharpness` | `0`-`100`, RCAS sharpening in percent (`0` = off) |
-| `[ui]` | `toggle_key` | Windows virtual-key code of the overlay key (default `119` = F8) |
+| `[ui]` | `toggle_key` | Windows virtual-key code of the settings menu key (default `119` = F8) |
+| `[ui]` | `debug_key` | key of the debug window (default `114` = F3) |
 | `[ui]` | `show_on_start`, `show_fps` | `0` / `1` |
 | `[debug]` | `d3d_debug` | `1` enables the D3D11 debug layer (slow; needs the Windows Graphics Tools) |
 
@@ -63,7 +65,7 @@ lets you pick FSR 3.1 or XeSS instead of DLSS:
 1. Install OptiScaler into the game folder as **`dxgi.dll`** (its default name; `version.dll` is taken by this mod),
    along with its `OptiScaler.ini`, `amd_fidelityfx_*.dll`, `libxess*.dll`, `libxell.dll` and `D3D12_Optiscaler\`.
    fakenvapi and dlssg aren't needed.
-2. Start the game. Catalyst Clarity's overlay shows that OptiScaler was detected, and OptiScaler's own menu
+2. Start the game. Catalyst Clarity's settings menu shows that OptiScaler was detected, and OptiScaler's own menu
    (**Insert**) switches the upscaler.
 
 FSR 3.1 (native DX11) and DLSS through OptiScaler have been checked in game; XeSS hasn't.

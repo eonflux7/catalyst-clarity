@@ -9,7 +9,8 @@ namespace cs {
 // so every setting is visible to the user.
 struct Config {
     int aa_mode = 2;           // [general] mode: 0 = engine TAA, 1 = skip (raw, debug), 2 = DLSS
-    UINT toggle_key = VK_F8;   // [ui] toggle_key, virtual-key code
+    UINT toggle_key = VK_F8;   // [ui] toggle_key, virtual-key code: settings menu
+    UINT debug_key = VK_F3;    // [ui] debug_key: debug window
     bool show_on_start = false;
     bool show_fps = false;     // small FPS readout while the overlay is closed
     int dlss_preset = 0;       // [dlss] preset: NGX render preset for every quality mode, 0 = DLSS default, 10-13 = J-M

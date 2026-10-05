@@ -4,7 +4,7 @@ https://github.com/eonflux7/catalyst-clarity
 INSTALL
   Extract everything into the game folder, next to MirrorsEdgeCatalyst.exe, e.g.
   C:\Program Files (x86)\Steam\steamapps\common\Mirrors Edge Catalyst
-  Start the game. DLSS Quality is on by default. Press F8 for the overlay.
+  Start the game. DLSS Quality is on by default. Press F8 for the settings menu.
 
 REQUIREMENTS
   NVIDIA RTX GPU with a current driver, Windows 10/11. Tested on the Steam version of the game.
@@ -12,7 +12,7 @@ REQUIREMENTS
   the mod stays inactive and catalyst_clarity.log says so.
 
 SETTINGS
-  Change them in the F8 overlay. They are saved to catalyst_clarity.ini in the game folder.
+  Change them in the F8 menu (F3 opens a debug window). They are saved to catalyst_clarity.ini in the game folder.
   [general] mode          2 = DLSS, 0 = game TAA
   [dlss] quality_mode     0 = game's resolution slider, 1 = DLAA, 2 = Quality, 3 = Balanced,
                           4 = Performance, 5 = Ultra Performance

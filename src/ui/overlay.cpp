@@ -1,8 +1,14 @@
-// ImGui overlay drawn into the game's back buffer just before Present.
+// ImGui overlay drawn into the game's back buffer just before Present: the settings menu (F8) for players
+// and the debug window (F3).
 //
 // Threads: only on_present (render thread) calls ImGui. wndproc just queues the messages ImGui
 // needs; on_present replays them before NewFrame with no lock held. Calling ImGui from wndproc
 // under a lock deadlocked: ImGui's SetCapture re-enters wndproc synchronously (WM_CAPTURECHANGED).
+//
+// Mouse in gameplay: the game reads the mouse through raw input and gets no legacy mouse messages then,
+// so clicks and the wheel are also taken from WM_INPUT while no legacy mouse message arrives, and the
+// cursor is freed by ui/input.cpp. If the OS cursor still does not move, the overlay cursor follows the
+// raw mouse motion instead.
 #include "ui/overlay.h"
 
 #include <windows.h>
@@ -13,6 +19,7 @@
 #include <imgui_impl_dx11.h>
 #include <imgui_impl_win32.h>
 
+#include <algorithm>
 #include <atomic>
 #include <mutex>
 #include <vector>
@@ -25,6 +32,7 @@
 #include "renderer/post.h"
 #include "renderer/render_scale.h"
 #include "renderer/taa.h"
+#include "ui/input.h"
 #include "upscaler/dlss.h"
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND, UINT, WPARAM, LPARAM);
@@ -41,41 +49,81 @@ static WNDPROC g_game_wndproc;
 static ID3D11Device* g_device;
 static ID3D11DeviceContext* g_context;
 static ID3D11RenderTargetView* g_rtv;
-static std::atomic<bool> g_visible;
-static bool g_toggle_down;
+static std::atomic<bool> g_menu_visible;   // F8
+static std::atomic<bool> g_debug_visible;  // F3
+static bool g_menu_key_down, g_debug_key_down;
 
 static uint64_t g_frames;
 static LARGE_INTEGER g_qpc_freq, g_qpc_last;
 static float g_frame_ms;
 
+constexpr ULONGLONG kLegacyMouseQuietMs = 500;  // no legacy mouse message for this long: use raw input
+
 struct QueuedMessage {
     UINT msg;
     WPARAM wparam;
     LPARAM lparam;
+    // msg == WM_INPUT: the raw mouse report, read on the window thread (the handle dies with the message).
+    USHORT raw_buttons;
+    SHORT raw_wheel;
+    LONG raw_dx, raw_dy;
 };
 static std::mutex g_queue_mutex;  // only ever held for a push or a swap, never around Win32 calls
 static std::vector<QueuedMessage> g_queue;
 static std::atomic<DWORD> g_wndproc_thread;
+static std::atomic<ULONGLONG> g_last_legacy_mouse;
+
+// Input diagnostics for the debug window.
+static struct {
+    uint32_t raw_mouse = 0;     // WM_INPUT mouse reports while open
+    uint32_t legacy_mouse = 0;  // legacy mouse messages while open
+    bool using_raw = false;     // clicks / wheel taken from raw input last frame
+    bool virtual_cursor = false;
+    float vx = 0, vy = 0;       // virtual cursor, client pixels
+    POINT last_real{};
+    int stuck_frames = 0;
+} g_in;
 
 static bool is_input_message(UINT msg) {
     return (msg >= WM_MOUSEFIRST && msg <= WM_MOUSELAST) || (msg >= WM_KEYFIRST && msg <= WM_KEYLAST) ||
            msg == WM_INPUT;
 }
 
-// Messages ImGui's Win32 backend consumes (WM_INPUT is not one of them).
+static bool is_legacy_mouse(UINT msg) { return msg >= WM_MOUSEFIRST && msg <= WM_MOUSELAST; }
+
+// Messages ImGui's Win32 backend consumes (WM_INPUT is translated separately).
 static bool imgui_wants(UINT msg) {
     return (is_input_message(msg) && msg != WM_INPUT) || msg == WM_MOUSELEAVE || msg == WM_SETFOCUS ||
            msg == WM_KILLFOCUS;
 }
 
+static bool any_visible() { return g_menu_visible || g_debug_visible; }
+
+static void queue(const QueuedMessage& m) {
+    std::lock_guard lock(g_queue_mutex);
+    if (g_queue.size() < 1024)
+        g_queue.push_back(m);
+}
+
 static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
     if (!g_wndproc_thread.exchange(GetCurrentThreadId()))
         logf("overlay: window messages on thread %lu", GetCurrentThreadId());
-    if (g_visible) {
+    if (any_visible()) {
+        if (is_legacy_mouse(msg))
+            g_last_legacy_mouse = GetTickCount64();
         if (imgui_wants(msg)) {
-            std::lock_guard lock(g_queue_mutex);
-            if (g_queue.size() < 1024)
-                g_queue.push_back({msg, wparam, lparam});
+            queue({msg, wparam, lparam, 0, 0, 0, 0});
+        } else if (msg == WM_INPUT) {
+            RAWINPUT ri;
+            UINT size = sizeof(ri);
+            if (GetRawInputData(reinterpret_cast<HRAWINPUT>(lparam), RID_INPUT, &ri, &size, sizeof(RAWINPUTHEADER)) !=
+                    static_cast<UINT>(-1) &&
+                ri.header.dwType == RIM_TYPEMOUSE) {
+                const RAWMOUSE& m = ri.data.mouse;
+                bool relative = (m.usFlags & MOUSE_MOVE_ABSOLUTE) == 0;
+                queue({msg, 0, 0, m.usButtonFlags, static_cast<SHORT>(m.usButtonData), relative ? m.lLastX : 0,
+                       relative ? m.lLastY : 0});
+            }
         }
         // While the overlay is open the game gets no mouse/keyboard input.
         if (is_input_message(msg))
@@ -84,16 +132,73 @@ static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpara
     return CallWindowProcW(g_game_wndproc, hwnd, msg, wparam, lparam);
 }
 
+static void raw_buttons(ImGuiIO& io, USHORT flags, SHORT wheel) {
+    static const struct { USHORT down, up; int button; } kButtons[] = {
+        {RI_MOUSE_LEFT_BUTTON_DOWN, RI_MOUSE_LEFT_BUTTON_UP, ImGuiMouseButton_Left},
+        {RI_MOUSE_RIGHT_BUTTON_DOWN, RI_MOUSE_RIGHT_BUTTON_UP, ImGuiMouseButton_Right},
+        {RI_MOUSE_MIDDLE_BUTTON_DOWN, RI_MOUSE_MIDDLE_BUTTON_UP, ImGuiMouseButton_Middle}};
+    for (const auto& b : kButtons) {
+        if (flags & b.down)
+            io.AddMouseButtonEvent(b.button, true);
+        if (flags & b.up)
+            io.AddMouseButtonEvent(b.button, false);
+    }
+    if (flags & RI_MOUSE_WHEEL)
+        io.AddMouseWheelEvent(0.0f, float(wheel) / float(WHEEL_DELTA));
+}
+
 // Feeds queued window messages to ImGui on the render thread. No lock is held while ImGui runs, so
 // anything it does that re-enters wndproc (SetCapture → WM_CAPTURECHANGED) only queues.
-static void drain_messages() {
+// Returns the summed raw mouse motion.
+static POINT drain_messages() {
     std::vector<QueuedMessage> messages;
     {
         std::lock_guard lock(g_queue_mutex);
         messages.swap(g_queue);
     }
-    for (const QueuedMessage& m : messages)
-        ImGui_ImplWin32_WndProcHandler(g_window, m.msg, m.wparam, m.lparam);
+    ImGuiIO& io = ImGui::GetIO();
+    g_in.using_raw = GetTickCount64() - g_last_legacy_mouse > kLegacyMouseQuietMs;
+    POINT motion{};
+    for (const QueuedMessage& m : messages) {
+        if (m.msg != WM_INPUT) {
+            if (is_legacy_mouse(m.msg))
+                ++g_in.legacy_mouse;
+            ImGui_ImplWin32_WndProcHandler(g_window, m.msg, m.wparam, m.lparam);
+            continue;
+        }
+        ++g_in.raw_mouse;
+        motion.x += m.raw_dx;
+        motion.y += m.raw_dy;
+        if (g_in.using_raw)
+            raw_buttons(io, m.raw_buttons, m.raw_wheel);
+    }
+    return motion;
+}
+
+// After the Win32 backend's NewFrame: if the OS cursor stays put while the mouse moves (the game keeps
+// it pinned some other way), drive the overlay cursor from the raw motion.
+static void update_virtual_cursor(POINT motion) {
+    POINT real{};
+    if (!input::real_cursor_pos(&real) || !ScreenToClient(g_window, &real))
+        return;
+    bool moved = real.x != g_in.last_real.x || real.y != g_in.last_real.y;
+    if (!g_in.virtual_cursor) {
+        g_in.stuck_frames = (motion.x || motion.y) && !moved ? g_in.stuck_frames + 1 : 0;
+        if (g_in.stuck_frames >= 3) {
+            g_in.virtual_cursor = true;
+            g_in.vx = float(real.x);
+            g_in.vy = float(real.y);
+            logf("overlay: OS cursor does not move with the mouse, using a virtual cursor");
+        }
+    }
+    g_in.last_real = real;
+    if (!g_in.virtual_cursor)
+        return;
+    RECT rc{};
+    GetClientRect(g_window, &rc);
+    g_in.vx = std::clamp(g_in.vx + float(motion.x), 0.0f, float(std::max<LONG>(rc.right - 1, 0)));
+    g_in.vy = std::clamp(g_in.vy + float(motion.y), 0.0f, float(std::max<LONG>(rc.bottom - 1, 0)));
+    ImGui::GetIO().AddMousePosEvent(g_in.vx, g_in.vy);
 }
 
 static bool init(IDXGISwapChain* swapchain) {
@@ -114,23 +219,25 @@ static bool init(IDXGISwapChain* swapchain) {
     ImGui::StyleColorsDark();
     ImGui_ImplWin32_Init(g_window);
     ImGui_ImplDX11_Init(g_device, g_context);
+    input::install();
 
     g_game_wndproc = reinterpret_cast<WNDPROC>(
         SetWindowLongPtrW(g_window, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(&wndproc)));
     g_swapchain = swapchain;
-    g_visible = config().show_on_start;
+    g_menu_visible = config().show_on_start;
     QueryPerformanceFrequency(&g_qpc_freq);
     QueryPerformanceCounter(&g_qpc_last);
-    logf("overlay: initialized, window %p, back buffer %ux%u fmt %d, toggle key 0x%x", g_window,
-         desc.BufferDesc.Width, desc.BufferDesc.Height, (int)desc.BufferDesc.Format, config().toggle_key);
+    logf("overlay: initialized, window %p, back buffer %ux%u fmt %d, menu key 0x%x, debug key 0x%x", g_window,
+         desc.BufferDesc.Width, desc.BufferDesc.Height, (int)desc.BufferDesc.Format, config().toggle_key,
+         config().debug_key);
     return true;
 }
 
-static void poll_toggle_key() {
-    bool down = GetForegroundWindow() == g_window && (GetAsyncKeyState((int)config().toggle_key) & 0x8000);
-    if (down && !g_toggle_down)
-        g_visible = !g_visible;
-    g_toggle_down = down;
+static void poll_key(UINT key, bool* was_down, std::atomic<bool>* visible) {
+    bool down = GetForegroundWindow() == g_window && (GetAsyncKeyState((int)key) & 0x8000);
+    if (down && !*was_down)
+        *visible = !*visible;
+    *was_down = down;
 }
 
 static void update_timing() {
@@ -151,6 +258,116 @@ static void draw_fps_corner() {
     ImGui::Text("%.1f fps  %.2f ms", g_frame_ms > 0 ? 1000.0f / g_frame_ms : 0.0f, g_frame_ms);
     ImGui::End();
 }
+
+static const ImVec4 kGood(0.4f, 1, 0.4f, 1), kWarn(1, 0.8f, 0.3f, 1), kBad(1, 0.4f, 0.3f, 1);
+
+static void set_mode(taa::Mode mode) {
+    taa::mode() = mode;
+    dlss_pass::request_reset();
+    config().aa_mode = static_cast<int>(mode);
+    config_save();
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// F8: settings menu for players.
+
+// NGX render presets worth offering on DLSS 310 (A-D removed, E-I/N/O deprecated or reserved).
+static const struct { int value; const char* name; } kPresets[] = {
+    {0, "Default (DLSS picks per mode)"}, {10, "J (transformer, less ghosting, more flicker)"},
+    {11, "K (transformer, best quality)"}, {12, "L (Ultra Performance default)"},
+    {13, "M (Performance default)"}};
+
+static void draw_status_line() {
+    const taa::Status& t = taa::status();
+    const dlss::Status& d = dlss::status();
+    const dlss_pass::Status& p = dlss_pass::status();
+    if (!t.function_hooked) {
+        ImGui::TextColored(kWarn, "Not active (yet). On an unsupported game version it stays off;");
+        ImGui::TextColored(kWarn, "catalyst_clarity.log in the game folder says why.");
+    } else if (taa::mode() != taa::Mode::Dlss) {
+        ImGui::TextUnformatted("DLSS off: the game's own anti-aliasing is used.");
+    } else if (d.init_tried && !d.available) {
+        ImGui::TextColored(kBad, "DLSS is not available on this GPU / driver%s.",
+                           d.needs_driver ? " (driver update needed)" : "");
+        ImGui::TextColored(kBad, "The game's own anti-aliasing is used.");
+    } else if (p.error) {
+        ImGui::TextColored(kWarn, "DLSS paused, the game's anti-aliasing is used: %s", p.error);
+    } else if (p.ready && p.output_width) {
+        ImGui::TextColored(kGood, "DLSS active: %ux%u -> %ux%u (%.0f%%)", p.render_width, p.render_height,
+                           p.output_width, p.output_height, 100.0 * p.render_width / p.output_width);
+    } else {
+        ImGui::TextUnformatted("DLSS starting...");
+    }
+    if (d.optiscaler_module[0])
+        ImGui::Text("OptiScaler %s detected: its menu (Insert) picks the upscaler.", d.optiscaler_version);
+}
+
+static void draw_menu_window() {
+    ImGui::SetNextWindowPos(ImVec2(40, 40), ImGuiCond_FirstUseEver);
+    ImGui::Begin("Catalyst Clarity", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse);
+    draw_status_line();
+    ImGui::Separator();
+
+    Config& c = config();
+    int mode = taa::mode() == taa::Mode::Dlss ? 1 : 0;
+    ImGui::TextUnformatted("Anti-aliasing:");
+    ImGui::SameLine();
+    bool changed = ImGui::RadioButton("DLSS", &mode, 1);
+    ImGui::SameLine();
+    changed |= ImGui::RadioButton("Game TAA", &mode, 0);
+    if (changed)
+        set_mode(mode ? taa::Mode::Dlss : taa::Mode::Engine);
+
+    ImGui::BeginDisabled(taa::mode() != taa::Mode::Dlss);
+    ImGui::SetNextItemWidth(300);
+    int qm = c.dlss_quality_mode < render_scale::kModeCount ? c.dlss_quality_mode : 0;
+    if (ImGui::BeginCombo("Quality", render_scale::kModes[qm].name)) {
+        for (int i = 0; i < render_scale::kModeCount; ++i) {
+            if (ImGui::Selectable(render_scale::kModes[i].name, i == qm) && i != qm) {
+                c.dlss_quality_mode = i;
+                config_save();
+            }
+        }
+        ImGui::EndCombo();
+    }
+    const char* current = "custom";
+    for (const auto& pr : kPresets)
+        if (pr.value == c.dlss_preset)
+            current = pr.name;
+    ImGui::SetNextItemWidth(300);
+    if (ImGui::BeginCombo("DLSS preset", current)) {
+        for (const auto& pr : kPresets) {
+            if (ImGui::Selectable(pr.name, pr.value == c.dlss_preset) && pr.value != c.dlss_preset) {
+                c.dlss_preset = pr.value;
+                config_save();
+                dlss::request_recreate();
+            }
+        }
+        ImGui::EndCombo();
+    }
+    ImGui::SetNextItemWidth(300);
+    ImGui::SliderInt("Sharpening", &c.dlss_sharpness, 0, 100, c.dlss_sharpness ? "%d%%" : "off");
+    if (ImGui::IsItemDeactivatedAfterEdit())
+        config_save();
+    ImGui::EndDisabled();
+
+    ImGui::Separator();
+    changed = ImGui::Checkbox("Show FPS", &c.show_fps);
+    ImGui::SameLine();
+    changed |= ImGui::Checkbox("Open this menu on start", &c.show_on_start);
+    if (changed)
+        config_save();
+    ImGui::TextDisabled("Settings are saved automatically. Press F8 to close.");
+    if (ImGui::CollapsingHeader("About")) {
+        ImGui::TextUnformatted("Catalyst Clarity " CS_VERSION ". Upscaling by NVIDIA DLSS.");
+        ImGui::TextUnformatted("Uses Dear ImGui and MinHook; sharpening is AMD FidelityFX RCAS.");
+        ImGui::TextDisabled("Not affiliated with or endorsed by EA, DICE or NVIDIA.");
+    }
+    ImGui::End();
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// F3: debug window.
 
 static const char* format_name(DXGI_FORMAT f) {
     switch (f) {
@@ -211,14 +428,10 @@ static void draw_taa_section() {
     changed |= ImGui::RadioButton("Skip (raw)", &mode, static_cast<int>(taa::Mode::Skip));
     ImGui::SameLine();
     changed |= ImGui::RadioButton("DLSS##mode", &mode, static_cast<int>(taa::Mode::Dlss));
-    if (changed) {
-        taa::mode() = static_cast<taa::Mode>(mode);
-        dlss_pass::request_reset();
-        config().aa_mode = mode;
-        config_save();
-    }
+    if (changed)
+        set_mode(static_cast<taa::Mode>(mode));
     if (taa::mode() == taa::Mode::Skip && t.skip_failed)
-        ImGui::TextColored(ImVec4(1, 0.4f, 0.3f, 1), "Passthrough failed (see log)");
+        ImGui::TextColored(kBad, "Passthrough failed (see log)");
 
     const taa::Snapshot& s = t.last;
     if (!s.valid) {
@@ -257,12 +470,11 @@ static void draw_dlss_section() {
     const dlss::Status& d = dlss::status();
     const dlss_pass::Status& p = dlss_pass::status();
     if (d.optiscaler_module[0])
-        ImGui::Text("OptiScaler %s (%s): its menu (Insert) picks the upscaler", d.optiscaler_version,
-                    d.optiscaler_module);
+        ImGui::Text("OptiScaler %s (%s)", d.optiscaler_version, d.optiscaler_module);
     if (!d.init_tried) {
-        ImGui::TextDisabled("Not initialised (select DLSS above)");
+        ImGui::TextDisabled("NGX not initialised (DLSS mode not used yet)");
     } else if (!d.available) {
-        ImGui::TextColored(ImVec4(1, 0.4f, 0.3f, 1), "DLSS unavailable: result 0x%08x%s", d.init_result,
+        ImGui::TextColored(kBad, "DLSS unavailable: result 0x%08x%s", d.init_result,
                            d.needs_driver ? ", driver update needed" : "");
     } else {
         ImGui::Text("Feature: %s (create 0x%08x), %ux%u -> %ux%u%s", d.feature_created ? "ok" : "FAILED",
@@ -270,59 +482,19 @@ static void draw_dlss_section() {
                     d.in_width == d.out_width ? " (DLAA)" : "");
         ImGui::Text("Evaluations %llu, last result 0x%08x", (unsigned long long)d.evaluations, d.last_eval_result);
     }
-    {
-        // NGX render presets worth offering on DLSS 310 (A-D removed, E-I/N/O deprecated or reserved).
-        static const struct { int value; const char* name; } kPresets[] = {
-            {0, "Default (DLSS picks per mode)"}, {10, "J (transformer, less ghosting, more flicker)"},
-            {11, "K (transformer, best quality)"}, {12, "L (Ultra Performance default)"},
-            {13, "M (Performance default)"}};
-        Config& c = config();
-        const char* current = "custom";
-        for (const auto& pr : kPresets)
-            if (pr.value == c.dlss_preset)
-                current = pr.name;
-        const render_scale::Status& rs = render_scale::status();
-        ImGui::SetNextItemWidth(300);
-        int qm = c.dlss_quality_mode < render_scale::kModeCount ? c.dlss_quality_mode : 0;
-        if (ImGui::BeginCombo("Quality mode", render_scale::kModes[qm].name)) {
-            for (int i = 0; i < render_scale::kModeCount; ++i) {
-                if (ImGui::Selectable(render_scale::kModes[i].name, i == qm) && i != qm) {
-                    c.dlss_quality_mode = i;
-                    config_save();
-                }
-            }
-            ImGui::EndCombo();
-        }
-        if (!rs.found)
-            ImGui::TextColored(ImVec4(1, 0.4f, 0.3f, 1), "Resolution scale setting not found (unknown build?)");
-        else if (rs.forcing)
-            ImGui::Text("Engine ResolutionScale %.3f (forced; the game's own %.3f comes back in Engine TAA mode)",
-                        rs.current, rs.game_value);
-        else
-            ImGui::Text("Engine ResolutionScale %.3f (game setting)", rs.current);
-        ImGui::SetNextItemWidth(300);
-        if (ImGui::BeginCombo("DLSS preset", current)) {
-            for (const auto& pr : kPresets) {
-                if (ImGui::Selectable(pr.name, pr.value == c.dlss_preset) && pr.value != c.dlss_preset) {
-                    c.dlss_preset = pr.value;
-                    config_save();
-                    dlss::request_recreate();
-                }
-            }
-            ImGui::EndCombo();
-        }
-        ImGui::SetNextItemWidth(300);
-        ImGui::SliderInt("Sharpening (RCAS)", &c.dlss_sharpness, 0, 100, c.dlss_sharpness ? "%d%%" : "off");
-        if (ImGui::IsItemDeactivatedAfterEdit())
-            config_save();
-        if (c.dlss_sharpness && p.ready && !p.sharpened) {
-            ImGui::SameLine();
-            ImGui::TextColored(ImVec4(1, 0.4f, 0.3f, 1), "unavailable (see log)");
-        }
-    }
+    const render_scale::Status& rs = render_scale::status();
+    if (!rs.found)
+        ImGui::TextColored(kBad, "Resolution scale setting not found (game code not matched?)");
+    else if (rs.forcing)
+        ImGui::Text("Engine ResolutionScale %.3f (forced; the game's own %.3f comes back in Engine TAA mode)",
+                    rs.current, rs.game_value);
+    else
+        ImGui::Text("Engine ResolutionScale %.3f (game setting)", rs.current);
+    if (config().dlss_sharpness && p.ready && !p.sharpened)
+        ImGui::TextColored(kBad, "Sharpening unavailable (see log)");
     if (taa::mode() == taa::Mode::Dlss) {
         if (p.error)
-            ImGui::TextColored(ImVec4(1, 0.4f, 0.3f, 1), "Using engine TAA: %s", p.error);
+            ImGui::TextColored(kBad, "Using engine TAA: %s", p.error);
         else if (p.ready)
             ImGui::Text("Active. Jitter to DLSS (%+.3f, %+.3f) px%s", p.jitter_x, p.jitter_y,
                         p.reset_last ? ", reset" : "");
@@ -340,7 +512,7 @@ static void draw_dlss_section() {
         ImGui::Checkbox("Motion blur at output size (off: render size, upsampled by tonemap)", &ps.motion_blur);
         if (ps.enabled && p.ready && p.downsampled) {
             auto pass = [](const char* name, bool seen, bool done) {
-                ImGui::TextColored(done ? ImVec4(0.4f, 1, 0.4f, 1) : ImVec4(1, 0.8f, 0.3f, 1), "%s: %s", name,
+                ImGui::TextColored(done ? kGood : kWarn, "%s: %s", name,
                                    !seen ? "not run" : done ? "output size" : "render size");
             };
             pass("Motion blur", pst.motion_blur_seen, pst.motion_blur_done);
@@ -354,12 +526,11 @@ static void draw_dlss_section() {
             pass("Resample replaced", true, pst.resample_done);
             ImGui::Text("Motion blur shader port: %s, LDR refills %u", pst.mb_shader, pst.ldr_refills);
             if (pst.other_ldr_writes)
-                ImGui::TextColored(ImVec4(1, 0.8f, 0.3f, 1), "%u unknown draws wrote the LDR target (lost)",
-                                   pst.other_ldr_writes);
+                ImGui::TextColored(kWarn, "%u unknown draws wrote the LDR target (lost)", pst.other_ldr_writes);
             if (pst.error)
-                ImGui::TextColored(ImVec4(1, 0.4f, 0.3f, 1), "Fallback: %s", pst.error);
+                ImGui::TextColored(kBad, "Fallback: %s", pst.error);
             if (pst.device_lost_after)
-                ImGui::TextColored(ImVec4(1, 0.4f, 0.3f, 1), "GPU device lost after %s", pst.device_lost_after);
+                ImGui::TextColored(kBad, "GPU device lost after %s", pst.device_lost_after);
         }
     }
 
@@ -368,8 +539,7 @@ static void draw_dlss_section() {
     ImGui::Checkbox("Resolve Runner's Vision mask (TAA port)", &s.rv_resolve);
     if (s.rv_resolve && p.ready) {
         ImGui::SameLine();
-        ImGui::TextColored(p.rv_resolved ? ImVec4(0.4f, 1, 0.4f, 1) : ImVec4(1, 0.8f, 0.3f, 1), "%s",
-                           p.rv_resolved ? "active" : "passthrough");
+        ImGui::TextColored(p.rv_resolved ? kGood : kWarn, "%s", p.rv_resolved ? "active" : "passthrough");
     }
 
     mip_bias::Settings& m = mip_bias::settings();
@@ -381,10 +551,10 @@ static void draw_dlss_section() {
     ImGui::SetNextItemWidth(160);
     ImGui::SliderFloat("offset (added to log2 render/output)", &m.offset, -2.0f, 1.0f, "%.2f");
     if (!ms.hooked)
-        ImGui::TextColored(ImVec4(1, 0.4f, 0.3f, 1), "PSSetSamplers not hooked");
+        ImGui::TextColored(kBad, "PSSetSamplers not hooked");
     else
         ImGui::Text("Bias %.2f, %u biased samplers, %u swaps last frame", ms.bias, ms.samplers, ms.swaps_last_frame);
-    ImGui::SeparatorText("Inputs (debug)");
+    ImGui::SeparatorText("Inputs");
     ImGui::TextUnformatted("Jitter = (x, y) from the engine table, times:");
     sign_toggle("negate X##jitter", &s.jitter_sign_x);
     ImGui::SameLine();
@@ -408,10 +578,20 @@ static void draw_dlss_section() {
     }
 }
 
-static void draw_main_window(IDXGISwapChain* swapchain) {
-    ImGui::SetNextWindowPos(ImVec2(40, 40), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(560, 0), ImGuiCond_FirstUseEver);
-    ImGui::Begin("Catalyst Clarity " CS_VERSION);
+static void draw_input_section() {
+    const input::Status& is = input::status();
+    ImGui::Text("Cursor hooks: %s, captured %d", is.hooked ? "ok" : "NOT INSTALLED", is.captured);
+    ImGui::Text("Game while open: SetCursorPos %u, ClipCursor %u, GetCursorPos %u", is.game_set_cursor,
+                is.game_clip_cursor, is.game_get_cursor);
+    ImGui::Text("Mouse reports: raw %u, legacy %u; clicks from %s", g_in.raw_mouse, g_in.legacy_mouse,
+                g_in.using_raw ? "raw input" : "window messages");
+    ImGui::Text("Cursor: %s", g_in.virtual_cursor ? "virtual (OS cursor pinned)" : "OS cursor");
+}
+
+static void draw_debug_window(IDXGISwapChain* swapchain) {
+    ImGui::SetNextWindowPos(ImVec2(480, 40), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(620, 0), ImGuiCond_FirstUseEver);
+    ImGui::Begin("Catalyst Clarity debug " CS_VERSION);
 
     const State& s = state();
     if (ImGui::CollapsingHeader("Status", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -427,29 +607,18 @@ static void draw_main_window(IDXGISwapChain* swapchain) {
                         (int)desc.BufferDesc.Format, desc.BufferCount);
         ImGui::Text("Frame %llu, %.1f fps (%.2f ms)", (unsigned long long)g_frames,
                     g_frame_ms > 0 ? 1000.0f / g_frame_ms : 0.0f, g_frame_ms);
+        ImGui::TextDisabled("D3D11 debug layer: [debug] d3d_debug=1 in catalyst_clarity.ini (restart)");
     }
-
     if (ImGui::CollapsingHeader("TAA", ImGuiTreeNodeFlags_DefaultOpen))
         draw_taa_section();
     if (ImGui::CollapsingHeader("DLSS", ImGuiTreeNodeFlags_DefaultOpen))
         draw_dlss_section();
-
-    if (ImGui::CollapsingHeader("Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
-        Config& c = config();
-        bool changed = false;
-        changed |= ImGui::Checkbox("FPS readout when closed", &c.show_fps);
-        changed |= ImGui::Checkbox("Open overlay on start", &c.show_on_start);
-        ImGui::Text("Toggle key: VK 0x%02X (edit toggle_key in catalyst_clarity.ini)", c.toggle_key);
-        if (changed)
-            config_save();
-    }
-    if (ImGui::CollapsingHeader("About")) {
-        ImGui::TextUnformatted("Catalyst Clarity " CS_VERSION ". Upscaling by NVIDIA DLSS.");
-        ImGui::TextUnformatted("Uses Dear ImGui and MinHook; sharpening is AMD FidelityFX RCAS.");
-        ImGui::TextDisabled("Not affiliated with or endorsed by EA, DICE or NVIDIA.");
-    }
+    if (ImGui::CollapsingHeader("Overlay input"))
+        draw_input_section();
     ImGui::End();
 }
+
+// ---------------------------------------------------------------------------------------------------------
 
 void on_present(IDXGISwapChain* swapchain) {
     if (g_failed)
@@ -470,12 +639,21 @@ void on_present(IDXGISwapChain* swapchain) {
     }
 
     update_timing();
-    poll_toggle_key();
-    bool visible = g_visible;
+    poll_key(config().toggle_key, &g_menu_key_down, &g_menu_visible);
+    poll_key(config().debug_key, &g_debug_key_down, &g_debug_visible);
+    bool menu = g_menu_visible, debug = g_debug_visible, visible = menu || debug;
+    if (visible && !input::status().captured) {  // just opened
+        g_in.virtual_cursor = false;
+        g_in.stuck_frames = 0;
+        g_in.raw_mouse = g_in.legacy_mouse = 0;
+        input::real_cursor_pos(&g_in.last_real);
+        ScreenToClient(g_window, &g_in.last_real);
+    }
+    input::set_captured(visible);
     if (!visible && !config().show_fps)
         return;
 
-    drain_messages();
+    POINT motion = drain_messages();
     std::lock_guard lock(g_render_mutex);
     if (!g_rtv) {
         ID3D11Texture2D* back_buffer = nullptr;
@@ -491,11 +669,18 @@ void on_present(IDXGISwapChain* swapchain) {
 
     ImGui::GetIO().MouseDrawCursor = visible;
     ImGui_ImplDX11_NewFrame();
-    ImGui_ImplWin32_NewFrame();
-    ImGui::NewFrame();
+    {
+        input::OwnCalls own;  // the backend's cursor calls see the real cursor
+        ImGui_ImplWin32_NewFrame();
+    }
     if (visible)
-        draw_main_window(swapchain);
-    else
+        update_virtual_cursor(motion);
+    ImGui::NewFrame();
+    if (menu)
+        draw_menu_window();
+    if (debug)
+        draw_debug_window(swapchain);
+    if (!visible)
         draw_fps_corner();
     ImGui::Render();
 
