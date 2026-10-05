@@ -13,8 +13,8 @@
 //     With motion blur off, M = D (the TAA output already is the mip chain).
 //   tonemap (+0x37468a0) and the LDR2 draw (+0x3747ec4), or in the map the DoF composite:
 //     mainTexture = M (tonemap), RTV = our output-size LDR texture L, viewport = output. The engine's
-//     render-size LDR target is refilled from L before any later draw reads it (map DoF downsample)
-//     and at the resample (UI background blur). Bloom, distortion and the Runner's Vision mask stay render size and are
+//     render-size LDR target is kept current by also running the engine's own draw into it (never refilled
+//     inside another engine draw: that hangs the GPU), and refilled at the resample (UI background blur). Bloom, distortion and the Runner's Vision mask stay render size and are
 //     upsampled by UV.
 //   RenderScaleResample (+0x374809b): skipped; L is copied to its swapchain target, and downsampled into
 //     the engine's render-size LDR target, which the UI background blur reads next.
@@ -41,6 +41,7 @@ struct Status {
     uint32_t post_draws = 0;        // Draw calls between TAA and Present
     uint32_t ldr_refills = 0;       // engine render-size LDR target refilled from L
     uint32_t other_ldr_writes = 0;  // unrecognised draws writing the engine LDR target (lost: should be 0)
+    uint32_t stale_ldr_reads = 0;   // unrecognised draws reading it before a refill (older image: should be 0)
     const char* error = nullptr;    // last fallback reason (sticky until a clean frame)
     const char* device_lost_after = nullptr;  // first pass after which the device reported removal
     const char* mb_shader = "not loaded";  // our motion blur shader port

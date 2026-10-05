@@ -297,6 +297,30 @@ struct Srvs {
     }
 };
 
+// True when the bound draw writes nothing but RTV0, so the engine's own draw can run as well as our
+// redirected copy (a UAV side effect would happen twice). Logged once per pass name.
+static bool only_rtv0(ID3D11DeviceContext* ctx, const Saved& saved, const char* name) {
+    ID3D11UnorderedAccessView* uavs[D3D11_1_UAV_SLOT_COUNT] = {};
+    ctx->OMGetRenderTargetsAndUnorderedAccessViews(0, nullptr, nullptr, 0, D3D11_1_UAV_SLOT_COUNT, uavs);
+    bool has_uav = false;
+    for (auto* u : uavs)
+        if (u) {
+            has_uav = true;
+            u->Release();
+        }
+    bool ok = !has_uav && saved.rtv_count() == 1;
+    static const char* logged[8];
+    static int logged_count;
+    for (int i = 0; i < logged_count; ++i)
+        if (logged[i] == name)
+            return ok;
+    if (logged_count < (int)std::size(logged))
+        logged[logged_count++] = name;
+    logf("post: %s %s the render-size LDR target itself (%u RTVs, UAVs %d)", name, ok ? "also fills" : "cannot fill",
+         saved.rtv_count(), has_uav);
+    return ok;
+}
+
 static bool init_motion_blur(ID3D11DeviceContext* ctx) {
     if (g_mb_init_tried)
         return g_mb_ps && g_mb_cb;
@@ -417,23 +441,8 @@ static bool tonemap(ID3D11DeviceContext* ctx, UINT vertex_count, UINT start_vert
     // The engine's own draw first, untouched: its render-size LDR target then holds what later engine
     // passes expect (the DoF downsample reads it mid-frame) without a refill. A refill there ran
     // inside the downsample's draw call, and an engine draw issued straight after our SwapDeviceContextState
-    // round trip hung the GPU within seconds (slides; same shape as the RV port after DLSS). Only when the
-    // draw writes nothing but RTV0: a UAV side effect would happen twice.
-    ID3D11UnorderedAccessView* uavs[D3D11_1_UAV_SLOT_COUNT] = {};
-    ctx->OMGetRenderTargetsAndUnorderedAccessViews(0, nullptr, nullptr, 0, D3D11_1_UAV_SLOT_COUNT, uavs);
-    bool has_uav = false;
-    for (auto* u : uavs)
-        if (u) {
-            has_uav = true;
-            u->Release();
-        }
-    bool engine_draw = !has_uav && saved.rtv_count() == 1;
-    static bool logged;
-    if (!logged) {
-        logged = true;
-        logf("post: tonemap %s the render-size LDR target itself (%u RTVs, UAVs %d)",
-             engine_draw ? "also fills" : "cannot fill", saved.rtv_count(), has_uav);
-    }
+    // round trip hung the GPU within seconds (slides; same shape as the RV port after DLSS).
+    bool engine_draw = only_rtv0(ctx, saved, "tonemap");
     if (engine_draw)
         draw(ctx, vertex_count, start_vertex);
 
@@ -456,19 +465,25 @@ static bool tonemap(ID3D11DeviceContext* ctx, UINT vertex_count, UINT start_vert
 
 // Draws that add onto the LDR target after tonemap (LDR2 in gameplay/pause, the DoF composite in the
 // map): RTV0 + viewport -> L at output size; shaders, constants, SRVs and the engine's blend state stay.
-// Both are UV-addressed, so no constant changes.
-static bool onto_ldr(ID3D11DeviceContext* ctx, UINT vertex_count, UINT start_vertex, DrawFn draw, const char* name,
-                     bool* done) {
+// Both are UV-addressed, so no constant changes. Like tonemap, the engine's own draw also runs onto its
+// render-size target, so later readers of that target (the loading-screen resample) need no refill:
+// a refill there ran inside their draw call and hung the GPU below 100% render scale (issue #1).
+static bool onto_ldr(ID3D11DeviceContext* ctx, UINT vertex_count, UINT start_vertex, DrawFn draw, const char* pass,
+                     const char* name, bool* done) {
     Frame& f = g_frame;
     if (!f.status.tonemap_done)
         return false;
     Saved saved(ctx);
     if (gpu::resource_of(saved.rtvs[0]) != f.engine_ldr)
         return fail(name);
+    bool engine_draw = only_rtv0(ctx, saved, pass);
+    if (engine_draw)
+        draw(ctx, vertex_count, start_vertex);
     saved.redirect(ctx, g_ldr.rtv, f.out_w, f.out_h);
     draw(ctx, vertex_count, start_vertex);
     saved.restore(ctx);
-    f.ldr_dirty = true;
+    if (!engine_draw)
+        f.ldr_dirty = true;
     *done = true;
     check_device(ctx, name);
     return true;
@@ -489,8 +504,10 @@ static void refill_engine_ldr(ID3D11DeviceContext* ctx) {
     d3d_debug::drain(ctx, "LDR refill");
 }
 
-// Any other draw after tonemap: refill the engine LDR target first if it reads it; count it if it
-// writes it (an unknown pass whose output the swapchain copy from L would lose).
+// Any other draw after tonemap: note it if it reads the engine LDR target, count it if it writes it (an
+// unknown pass whose output the swapchain copy from L would lose). Never refill here: the engine draw
+// would run straight after our Scope round trip, which hangs the GPU (DEVICE_HUNG). If the target is
+// stale (a known pass could not also run the engine draw), the reader sees the older contents.
 static void other_draw(ID3D11DeviceContext* ctx) {
     Frame& f = g_frame;
     if (!f.status.tonemap_done)
@@ -498,10 +515,10 @@ static void other_draw(ID3D11DeviceContext* ctx) {
     {
         Srvs srvs(ctx);
         if (srvs.slot_of(f.engine_ldr) >= 0) {
-            trace("unknown draw reads LDR");
+            trace(f.ldr_dirty ? "unknown draw reads stale LDR" : "unknown draw reads LDR");
             log_unknown_draw("reading the engine LDR target");
             if (f.ldr_dirty)
-                refill_engine_ldr(ctx);
+                ++f.status.stale_ldr_reads;
         }
     }
     ID3D11RenderTargetView* rtv = nullptr;
@@ -570,10 +587,11 @@ bool on_draw(ID3D11DeviceContext* ctx, UINT vertex_count, UINT start_vertex, Dra
     case Pass::MotionBlur: return motion_blur(ctx, vertex_count, start_vertex, draw);
     case Pass::Tonemap: return tonemap(ctx, vertex_count, start_vertex, draw);
     case Pass::Ldr2:
-        return onto_ldr(ctx, vertex_count, start_vertex, draw, "LDR2 does not write the LDR target",
+        return onto_ldr(ctx, vertex_count, start_vertex, draw, "LDR2", "LDR2 does not write the LDR target",
                         &g_frame.status.ldr2_done);
     case Pass::Dof:
-        return onto_ldr(ctx, vertex_count, start_vertex, draw, "DoF composite does not write the LDR target",
+        return onto_ldr(ctx, vertex_count, start_vertex, draw, "DoF composite",
+                        "DoF composite does not write the LDR target",
                         &g_frame.status.dof_done);
     case Pass::Resample: return resample(ctx);
     default: other_draw(ctx); return false;

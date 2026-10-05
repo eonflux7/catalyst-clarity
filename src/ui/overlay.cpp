@@ -82,6 +82,7 @@ static struct {
     float vx = 0, vy = 0;       // virtual cursor, client pixels
     POINT last_real{};
     int stuck_frames = 0;
+    uint32_t os_cursor_fed = 0;  // frames the OS cursor position was fed to ImGui by us
 } g_in;
 
 static bool is_input_message(UINT msg) {
@@ -192,8 +193,16 @@ static void update_virtual_cursor(POINT motion) {
         }
     }
     g_in.last_real = real;
-    if (!g_in.virtual_cursor)
+    if (!g_in.virtual_cursor) {
+        // The Win32 backend stops polling the cursor once it has seen a WM_MOUSEMOVE and then waits for
+        // more; when the game switches to raw input only (gameplay, e.g. after a death) none come and the
+        // overlay cursor froze while the OS cursor moved. Feed the real position ourselves.
+        if (moved) {
+            ImGui::GetIO().AddMousePosEvent(float(real.x), float(real.y));
+            ++g_in.os_cursor_fed;
+        }
         return;
+    }
     RECT rc{};
     GetClientRect(g_window, &rc);
     g_in.vx = std::clamp(g_in.vx + float(motion.x), 0.0f, float(std::max<LONG>(rc.right - 1, 0)));
@@ -551,6 +560,8 @@ static void draw_dlss_section() {
             ImGui::Text("Motion blur shader port: %s, LDR refills %u", pst.mb_shader, pst.ldr_refills);
             if (pst.other_ldr_writes)
                 ImGui::TextColored(kWarn, "%u unknown draws wrote the LDR target (lost)", pst.other_ldr_writes);
+            if (pst.stale_ldr_reads)
+                ImGui::TextColored(kWarn, "%u unknown draws read a stale LDR target", pst.stale_ldr_reads);
             if (pst.error)
                 ImGui::TextColored(kBad, "Fallback: %s", pst.error);
             if (pst.device_lost_after)
@@ -609,7 +620,8 @@ static void draw_input_section() {
                 is.game_clip_cursor, is.game_get_cursor);
     ImGui::Text("Mouse reports: raw %u, legacy %u; clicks from %s", g_in.raw_mouse, g_in.legacy_mouse,
                 g_in.using_raw ? "raw input" : "window messages");
-    ImGui::Text("Cursor: %s", g_in.virtual_cursor ? "virtual (OS cursor pinned)" : "OS cursor");
+    ImGui::Text("Cursor: %s, OS position fed %u frames", g_in.virtual_cursor ? "virtual (OS cursor pinned)" : "OS cursor",
+                g_in.os_cursor_fed);
 }
 
 static void draw_debug_window(IDXGISwapChain* swapchain) {
@@ -670,10 +682,13 @@ void on_present(IDXGISwapChain* swapchain) {
     if (visible && !input::status().captured) {  // just opened
         g_in.virtual_cursor = false;
         g_in.stuck_frames = 0;
-        g_in.raw_mouse = g_in.legacy_mouse = 0;
+        g_in.raw_mouse = g_in.legacy_mouse = g_in.os_cursor_fed = 0;
         input::real_cursor_pos(&g_in.last_real);
         ScreenToClient(g_window, &g_in.last_real);
     }
+    if (!visible && input::status().captured)  // just closed
+        logf("overlay: input while open: mouse reports raw %u, legacy %u; cursor %s, OS position fed %u frames",
+             g_in.raw_mouse, g_in.legacy_mouse, g_in.virtual_cursor ? "virtual" : "OS", g_in.os_cursor_fed);
     input::set_captured(visible);
     if (!visible && !config().show_fps)
         return;
