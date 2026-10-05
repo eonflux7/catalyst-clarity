@@ -34,11 +34,10 @@ It's a drop-in `version.dll` that hooks the game in memory. No game files are mo
 
 ## Install
 
-> **AMD / Intel GPU?** Try the experimental
-> [0.2.0 pre-release](https://github.com/eonflux7/catalyst-clarity/releases/tag/v0.2.0-experimental). It switches
-> the game to the TAA path it normally uses only on NVIDIA, so the mod can replace it there too. DLSS needs an
-> RTX GPU, so use [OptiScaler](#optiscaler) for FSR 3.1 or XeSS. It isn't tested on real AMD / Intel hardware yet:
-> please report how it went, with `catalyst_clarity.log`. NVIDIA RTX users: 0.1.0 (Latest) is the tested build.
+> **AMD / Intel GPU?** Since 0.2.0 the mod switches the game to the TAA path it normally uses only on NVIDIA, so
+> it can replace it there too (a no-op on NVIDIA). DLSS needs an RTX GPU, so use [OptiScaler](#optiscaler) for
+> FSR 3.1 or XeSS. It isn't tested on real AMD / Intel hardware yet: please report how it went, with
+> `catalyst_clarity.log`.
 
 1. Download `catalyst-clarity-<version>.zip` from [Releases](../../releases).
 2. Extract it into the game folder, next to `MirrorsEdgeCatalyst.exe`
