@@ -12,6 +12,7 @@ Config& config() { return g_config; }
 void config_load(const std::wstring& path) {
     g_path = path;
     const wchar_t* f = g_path.c_str();
+    g_config.any_gpu = GetPrivateProfileIntW(L"general", L"any_gpu", g_config.any_gpu, f) != 0;
     g_config.aa_mode = GetPrivateProfileIntW(L"general", L"mode", g_config.aa_mode, f);
     if (g_config.aa_mode < 0 || g_config.aa_mode > 2)
         g_config.aa_mode = 2;
@@ -30,6 +31,7 @@ void config_save() {
     if (g_path.empty())
         return;
     const wchar_t* f = g_path.c_str();
+    WritePrivateProfileStringW(L"general", L"any_gpu", g_config.any_gpu ? L"1" : L"0", f);
     WritePrivateProfileStringW(L"general", L"mode", std::to_wstring(g_config.aa_mode).c_str(), f);
     WritePrivateProfileStringW(L"ui", L"toggle_key", std::to_wstring(g_config.toggle_key).c_str(), f);
     WritePrivateProfileStringW(L"ui", L"debug_key", std::to_wstring(g_config.debug_key).c_str(), f);

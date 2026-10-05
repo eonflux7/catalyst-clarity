@@ -201,12 +201,33 @@ static void update_virtual_cursor(POINT motion) {
     ImGui::GetIO().AddMousePosEvent(g_in.vx, g_in.vy);
 }
 
+static UINT g_gpu_vendor;
+static char g_gpu_name[128];
+
+static void read_gpu(ID3D11Device* device) {
+    IDXGIDevice* dxgi = nullptr;
+    if (FAILED(device->QueryInterface(__uuidof(IDXGIDevice), reinterpret_cast<void**>(&dxgi))))
+        return;
+    IDXGIAdapter* adapter = nullptr;
+    if (SUCCEEDED(dxgi->GetAdapter(&adapter))) {
+        DXGI_ADAPTER_DESC d;
+        if (SUCCEEDED(adapter->GetDesc(&d))) {
+            g_gpu_vendor = d.VendorId;
+            WideCharToMultiByte(CP_UTF8, 0, d.Description, -1, g_gpu_name, sizeof(g_gpu_name), nullptr, nullptr);
+        }
+        adapter->Release();
+    }
+    dxgi->Release();
+    logf("overlay: GPU %s, vendor 0x%04x", g_gpu_name, g_gpu_vendor);
+}
+
 static bool init(IDXGISwapChain* swapchain) {
     if (FAILED(swapchain->GetDevice(__uuidof(ID3D11Device), reinterpret_cast<void**>(&g_device)))) {
         logf("overlay: swapchain has no D3D11 device, overlay disabled");
         return false;
     }
     g_device->GetImmediateContext(&g_context);
+    read_gpu(g_device);
     DXGI_SWAP_CHAIN_DESC desc;
     swapchain->GetDesc(&desc);
     g_window = desc.OutputWindow;
@@ -300,6 +321,8 @@ static void draw_status_line() {
     }
     if (d.optiscaler_module[0])
         ImGui::Text("OptiScaler %s detected: its menu (Insert) picks the upscaler.", d.optiscaler_version);
+    else if (g_gpu_vendor && g_gpu_vendor != 0x10de)
+        ImGui::TextColored(kWarn, "AMD / Intel GPU: experimental. Install OptiScaler for FSR 3.1 / XeSS.");
 }
 
 static void draw_menu_window() {
@@ -416,6 +439,7 @@ static void draw_taa_section() {
     ImGui::Text("Function hook: %s (code ready after %u ms)%s", t.function_hooked ? "ok" : "NOT INSTALLED",
                 t.code_wait_ms, t.hook_lost ? ", HOOK OVERWRITTEN" : "");
     ImGui::Text("Draw hook: %s", t.draw_hooked ? "ok" : "NOT INSTALLED");
+    ImGui::Text("Pixel-shader TAA path on every GPU: %s", t.vendor_patch);
     ImGui::Text("Last frame: %u TAA calls, %u TAA draws, %u other draws inside (passed through)",
                 t.calls_last_frame, t.draws_last_frame, t.other_draws_last_frame);
     ImGui::Text("View: frame index %u, TAA enabled %u", t.view_frame_index, t.view_taa_enabled);
@@ -596,6 +620,7 @@ static void draw_debug_window(IDXGISwapChain* swapchain) {
     const State& s = state();
     if (ImGui::CollapsingHeader("Status", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::Text("Game base 0x%llx", (unsigned long long)s.game_base);
+        ImGui::Text("GPU %s (vendor 0x%04x)", g_gpu_name, g_gpu_vendor);
         if (s.tested_build)
             ImGui::Text("Build: tested (PE timestamp %u)", s.game_timestamp);
         else

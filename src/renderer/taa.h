@@ -39,6 +39,7 @@ struct Status {
     uint32_t code_wait_ms = 0;
     bool draw_hooked = false;
     bool hook_lost = false;  // our jmp at the TAA entry was overwritten
+    const char* vendor_patch = "not tried";  // pixel-shader TAA path forced on every GPU vendor
     uint32_t calls_last_frame = 0;
     uint32_t draws_last_frame = 0;
     // Draws inside the TAA call that are not the TAA resolve (High preset adds a temporal resolve of three

@@ -25,8 +25,11 @@ It's a drop-in `version.dll` that hooks the game in memory. No game files are mo
 - Mirror's Edge Catalyst. Made and tested on the **Steam version**. Other versions (Origin / EA app) are untested:
   you can try them at your own risk. The mod hooks the game only if the game code it needs is identical to the
   Steam build. Otherwise it stays inactive, says so in `catalyst_clarity.log`, and the game runs as usual.
-- An **NVIDIA RTX** GPU and a current driver. On non-NVIDIA GPUs the game uses a different (compute) TAA path that
-  this mod doesn't hook, so AMD and Intel GPUs aren't supported, even through OptiScaler.
+- An **NVIDIA RTX** GPU and a current driver for DLSS.
+- **AMD and Intel GPUs (experimental, 0.2.0 and later):** the game normally uses a different (compute) TAA path on
+  them; the mod switches it to the NVIDIA path so it can be replaced. DLSS itself needs an RTX GPU, so install
+  [OptiScaler](#optiscaler) and pick FSR 3.1 or XeSS. Untested on real AMD / Intel hardware so far: reports
+  (with `catalyst_clarity.log`) are welcome. `[general] any_gpu=0` turns it off.
 - Windows 10 or 11.
 
 ## Install
@@ -45,6 +48,7 @@ The settings menu (F8) changes everything live. The settings are saved in `catal
 
 | Section | Key | Values |
 |---|---|---|
+| `[general]` | `any_gpu` | `1` (default) run the game's NVIDIA TAA path on AMD / Intel too, `0` off |
 | `[general]` | `mode` | `2` DLSS (default), `0` the game's TAA, `1` no AA (debug) |
 | `[dlss]` | `quality_mode` | `0` follow the game's Resolution scale slider, `1` DLAA, `2` Quality (default), `3` Balanced, `4` Performance, `5` Ultra Performance |
 | `[dlss]` | `preset` | `0` DLSS default, `10`-`13` presets J-M |

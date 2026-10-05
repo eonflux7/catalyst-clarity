@@ -8,6 +8,7 @@ namespace cs {
 // catalyst_clarity.ini next to the DLL. Missing keys get defaults; the file is written back on load
 // so every setting is visible to the user.
 struct Config {
+    bool any_gpu = true;       // [general] any_gpu: force the engine's NVIDIA TAA path on AMD / Intel (experimental)
     int aa_mode = 2;           // [general] mode: 0 = engine TAA, 1 = skip (raw, debug), 2 = DLSS
     UINT toggle_key = VK_F8;   // [ui] toggle_key, virtual-key code: settings menu
     UINT debug_key = VK_F3;    // [ui] debug_key: debug window

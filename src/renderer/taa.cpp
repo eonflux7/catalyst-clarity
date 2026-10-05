@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstring>
 
+#include "core/config.h"
 #include "core/d3d_debug.h"
 #include "core/log.h"
 #include "core/state.h"
@@ -65,6 +66,63 @@ static bool safe_equal(const uint8_t* p, const uint8_t* expected, size_t n) {
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         return false;
     }
+}
+
+// AMD / Intel: the TAA function draws the TAAResolvePs pixel shader only when the adapter vendor is NVIDIA
+// (0x10de) and dispatches the TAAResolve compute shader otherwise (docs/taa.md). Its three vendor branches
+// (`cmp dword [rax+0x24], 0x10de; mov rax, [rsi]; jne other_vendor`) get a jump distance of 0, so every GPU
+// takes the pixel-shader path the mod hooks. A no-op on NVIDIA, where the jumps are never taken. Each patch
+// is one byte, so a thread running the function never sees half an instruction.
+struct VendorBranch {
+    uintptr_t rva;           // the cmp
+    uint8_t expected[16];    // cmp + mov + jne as in the game
+    size_t length;
+    size_t distance_offset;  // first byte of the jne distance (the only non-zero one)
+};
+static const VendorBranch kVendorBranches[] = {
+    {0x35d2fad, {0x81, 0x78, 0x24, 0xde, 0x10, 0x00, 0x00, 0x48, 0x8b, 0x06, 0x0f, 0x85, 0xf6, 0x00, 0x00, 0x00}, 16, 12},
+    {0x35d3213, {0x81, 0x78, 0x24, 0xde, 0x10, 0x00, 0x00, 0x48, 0x8b, 0x06, 0x75, 0x54}, 12, 11},
+    {0x35d331c, {0x81, 0x78, 0x24, 0xde, 0x10, 0x00, 0x00, 0x48, 0x8b, 0x06, 0x75, 0x3f}, 12, 11},
+};
+
+static bool branch_patched(const uint8_t* p, const VendorBranch& b) {
+    uint8_t want[16];
+    memcpy(want, b.expected, b.length);
+    want[b.distance_offset] = 0;
+    return safe_equal(p, want, b.length);
+}
+
+static void force_pixel_shader_path() {
+    if (!config().any_gpu) {
+        g_status.vendor_patch = "off ([general] any_gpu=0)";
+        logf("taa: vendor branches left alone (any_gpu=0)");
+        return;
+    }
+    // All three must match before anything is written: patching only some would bind state for one path
+    // and run the other.
+    for (const VendorBranch& b : kVendorBranches) {
+        auto* p = reinterpret_cast<const uint8_t*>(state().game_base + b.rva);
+        if (!safe_equal(p, b.expected, b.length) && !branch_patched(p, b)) {
+            g_status.vendor_patch = "code differs, not patched";
+            logf("taa: vendor branch at RVA 0x%llx differs from the tested build, not patching any",
+                 (unsigned long long)b.rva);
+            return;
+        }
+    }
+    for (const VendorBranch& b : kVendorBranches) {
+        auto* p = reinterpret_cast<uint8_t*>(state().game_base + b.rva + b.distance_offset);
+        DWORD old = 0;
+        if (!VirtualProtect(p, 1, PAGE_EXECUTE_READWRITE, &old)) {
+            g_status.vendor_patch = "VirtualProtect failed";
+            logf("taa: VirtualProtect at RVA 0x%llx failed (%lu)", (unsigned long long)b.rva, GetLastError());
+            return;
+        }
+        *p = 0;
+        VirtualProtect(p, 1, old, &old);
+        FlushInstructionCache(GetCurrentProcess(), p, 1);
+    }
+    g_status.vendor_patch = "applied";
+    logf("taa: TAA vendor branches patched: pixel-shader path on every GPU");
 }
 
 static void read_view(const uint8_t* view) {
@@ -263,6 +321,7 @@ bool install_function_hook() {
     }
     g_status.code_wait_ms = static_cast<uint32_t>(GetTickCount64() - start);
     state().code_matched = true;
+    force_pixel_shader_path();
 
     MH_STATUS created = MH_CreateHook(g_taa_entry, reinterpret_cast<void*>(&hk_taa), reinterpret_cast<void**>(&o_taa));
     MH_STATUS enabled = created == MH_OK ? MH_EnableHook(g_taa_entry) : created;

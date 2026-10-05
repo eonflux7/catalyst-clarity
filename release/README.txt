@@ -7,7 +7,8 @@ INSTALL
   Start the game. DLSS Quality is on by default. Press F8 for the settings menu.
 
 REQUIREMENTS
-  NVIDIA RTX GPU with a current driver, Windows 10/11. Tested on the Steam version of the game.
+  NVIDIA RTX GPU with a current driver, Windows 10/11. AMD / Intel GPUs: experimental, use
+  OptiScaler (as dxgi.dll) for FSR 3.1 / XeSS. Tested on the Steam version of the game.
   Other versions (Origin / EA app) are untested: try at your own risk. If the game code differs,
   the mod stays inactive and catalyst_clarity.log says so.
 

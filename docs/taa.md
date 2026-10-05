@@ -14,7 +14,12 @@ motion vectors, jitter and exposure. RVAs are for the supported Steam build ([fr
 - History textures come from a table at `state+0x78`, ping-ponged on `frameIndex & 1`.
 - On NVIDIA GPUs (adapter vendor `0x10de`) it draws a fullscreen pixel shader `TAAResolvePs` (draw call site
   `0x35d3351`). **On other vendors it dispatches a compute shader `TAAResolve` instead**, with
-  `ceil(w/16) x ceil(h/16)` groups. Catalyst Clarity hooks the draw, so it only works on NVIDIA.
+  `ceil(w/16) x ceil(h/16)` groups. The function checks the vendor three times (state setup, history
+  bindings, draw vs dispatch), each as `cmp dword [rax+0x24], 0x10de` + `jne` at RVAs `0x35d2fad`, `0x35d3213`
+  and `0x35d331c`. Catalyst Clarity hooks the draw; on AMD and Intel it sets the three jump distances to 0 so
+  the pixel-shader path runs there too (experimental, `[general] any_gpu`).
+- About 20 other vendor checks in the renderer exist; the ones checked choose multi-GPU (AFR) frame counts and
+  don't change which passes run on a single GPU.
 - On the High graphics preset (not Medium) the same function issues a **second draw**: a temporal resolve of
   single-channel data (t0 depth, t1 velocity, t2-t4 R8 inputs, RTV0-2 R8). A hook must pick the colour resolve
   by its bindings (HDR colour in t3, HDR target in RTV1), or it will run the upscaler twice per frame.
