@@ -42,7 +42,9 @@ It's a drop-in `version.dll` that hooks the game in memory. No game files are mo
 1. Download `catalyst-clarity-<version>.zip` from [Releases](../../releases).
 2. Extract it into the game folder, next to `MirrorsEdgeCatalyst.exe`
    (for example `C:\Program Files (x86)\Steam\steamapps\common\Mirrors Edge Catalyst`).
-3. Start the game. DLSS Quality is on by default. Press **F8** for the settings menu.
+3. Turn off the EA app's in-game overlay in the EA app's settings. With it on,
+   `version.dll` isn't loaded at all: no `catalyst_clarity.log` appears and the game runs without the mod.
+4. Start the game. DLSS Quality is on by default. Press **F8** for the settings menu.
 
 To uninstall, delete `version.dll`, `nvngx_dlss.dll`, `catalyst_clarity.ini`, `catalyst_clarity.log`,
 `catalyst_clarity_README.txt` and the `catalyst_clarity_licenses` folder.
