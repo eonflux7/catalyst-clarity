@@ -1,5 +1,5 @@
 @echo off
-rem Builds version.dll with MSVC + Ninja into build\. "build.cmd dist" also packages dist\catalyst-clarity-<version>.zip.
+rem Builds dinput8.dll with MSVC + Ninja into build\. "build.cmd dist" also packages dist\catalyst-clarity-<version>.zip.
 rem Needs Visual Studio 2022 (or Build Tools) with the C++ x64 tools; CMake and Ninja come with it.
 setlocal
 set "ROOT=%~dp0"
@@ -19,7 +19,7 @@ for /f "tokens=3" %%v in ("%PROJ%") do set "VER=%%v"
 set "STAGE=%ROOT%build\dist\catalyst-clarity"
 if exist "%STAGE%" rmdir /s /q "%STAGE%"
 mkdir "%STAGE%\catalyst_clarity_licenses" || exit /b 1
-copy /y "%ROOT%build\version.dll" "%STAGE%\" >nul || exit /b 1
+copy /y "%ROOT%build\dinput8.dll" "%STAGE%\" >nul || exit /b 1
 copy /y "%ROOT%build\ngx\rel\nvngx_dlss.dll" "%STAGE%\" >nul || exit /b 1
 copy /y "%ROOT%release\README.txt" "%STAGE%\catalyst_clarity_README.txt" >nul || exit /b 1
 set "LIC=%STAGE%\catalyst_clarity_licenses"

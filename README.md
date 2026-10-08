@@ -4,7 +4,7 @@ NVIDIA DLSS for **Mirror's Edge Catalyst** (PC, Steam). Catalyst Clarity replace
 Super Resolution / DLAA and runs motion blur, tonemapping and the rest of post-processing at your output
 resolution, so you get a sharp image from a lower render resolution.
 
-It's a drop-in `version.dll` that hooks the game in memory. No game files are modified.
+It's a drop-in `dinput8.dll` that hooks the game in memory. No game files are modified.
 
 ## Features
 
@@ -40,13 +40,15 @@ It's a drop-in `version.dll` that hooks the game in memory. No game files are mo
 > `catalyst_clarity.log`.
 
 1. Download `catalyst-clarity-<version>.zip` from [Releases](../../releases).
-2. Extract it into the game folder, next to `MirrorsEdgeCatalyst.exe`
+2. **Updating from 0.2.1 or older?** Delete `version.dll` from the game folder. The mod is now `dinput8.dll`.
+3. Extract the zip into the game folder, next to `MirrorsEdgeCatalyst.exe`, replacing older files
    (for example `C:\Program Files (x86)\Steam\steamapps\common\Mirrors Edge Catalyst`).
-3. Turn off the EA app's in-game overlay in the EA app's settings. With it on,
-   `version.dll` isn't loaded at all: no `catalyst_clarity.log` appears and the game runs without the mod.
-4. Start the game. DLSS Quality is on by default. Press **F8** for the settings menu.
+   `catalyst_clarity.ini` keeps your settings.
+4. **Linux (Steam / Proton) only:** set the game's launch options to
+   `WINEDLLOVERRIDES="dinput8=n,b" %command%`, so Proton loads the mod instead of its own `dinput8.dll`.
+5. Start the game. DLSS Quality is on by default. Press **F8** for the settings menu.
 
-To uninstall, delete `version.dll`, `nvngx_dlss.dll`, `catalyst_clarity.ini`, `catalyst_clarity.log`,
+To uninstall, delete `dinput8.dll`, `nvngx_dlss.dll`, `catalyst_clarity.ini`, `catalyst_clarity.log`,
 `catalyst_clarity_README.txt` and the `catalyst_clarity_licenses` folder.
 
 ## Settings
@@ -73,7 +75,7 @@ you switch DLSS off. Your saved setting isn't changed.
 [OptiScaler](https://github.com/optiscaler/OptiScaler) (tested with 0.9.4) works on top of Catalyst Clarity and
 lets you pick FSR 3.1 or XeSS instead of DLSS:
 
-1. Install OptiScaler into the game folder as **`dxgi.dll`** (its default name; `version.dll` is taken by this mod),
+1. Install OptiScaler into the game folder as **`dxgi.dll`** (its default name; `dinput8.dll` is taken by this mod),
    along with its `OptiScaler.ini`, `amd_fidelityfx_*.dll`, `libxess*.dll`, `libxell.dll` and `D3D12_Optiscaler\`.
    fakenvapi and dlssg aren't needed.
 2. Start the game. Catalyst Clarity's settings menu shows that OptiScaler was detected, and OptiScaler's own menu
@@ -87,7 +89,7 @@ FSR 3.1 (native DX11) and DLSS through OptiScaler have been checked in game; XeS
 - On RTX 20-series GPUs the default DLSS presets (transformer model) are expensive, and DLSS Quality can be slower
   than the game's TAA at 100%. Try Performance mode.
 - The game must be running in DirectX 11 (the only renderer the PC version has).
-- Some antivirus tools flag `version.dll` proxies on principle. Build it yourself from source if in doubt.
+- Some antivirus tools flag `dinput8.dll` proxies on principle. Build it yourself from source if in doubt.
 
 If something goes wrong, `catalyst_clarity.log` in the game folder says what the mod did. Please attach it to
 bug reports.
@@ -111,7 +113,7 @@ The knowledge behind it is in [`docs/`](docs):
 Requirements: Visual Studio 2022 (or the Build Tools) with the C++ x64 workload. CMake and Ninja ship with it.
 
 ```
-build.cmd           :: build\version.dll
+build.cmd           :: build\dinput8.dll
 build.cmd dist      :: also dist\catalyst-clarity-<version>.zip
 ```
 

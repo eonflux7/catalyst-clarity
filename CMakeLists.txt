@@ -1,7 +1,7 @@
 # Catalyst Clarity: DLSS for Mirror's Edge Catalyst. Built on Windows with MSVC (build.cmd).
-# Output is version.dll: a proxy for System32\version.dll that the game loads from its own folder.
+# Output is dinput8.dll: a proxy for System32\dinput8.dll that the game loads from its own folder.
 cmake_minimum_required(VERSION 3.24)
-project(catalyst_clarity VERSION 0.2.1 LANGUAGES C CXX ASM_MASM)
+project(catalyst_clarity VERSION 0.2.2 LANGUAGES C CXX ASM_MASM)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -48,7 +48,7 @@ foreach(f ${DLSS_SDK_FILES})
         file(RENAME ${DLSS_SDK_DIR}/${f}.part ${DLSS_SDK_DIR}/${f})
     endif()
 endforeach()
-# Copied next to version.dll: rel ships in the release zip, dev has the DLSS debug overlay.
+# Copied next to dinput8.dll: rel ships in the release zip, dev has the DLSS debug overlay.
 file(COPY ${DLSS_SDK_DIR}/lib/Windows_x86_64/rel/nvngx_dlss.dll DESTINATION ${CMAKE_BINARY_DIR}/ngx/rel)
 file(COPY ${DLSS_SDK_DIR}/lib/Windows_x86_64/dev/nvngx_dlss.dll DESTINATION ${CMAKE_BINARY_DIR}/ngx/dev)
 
@@ -72,9 +72,9 @@ add_library(catalyst_clarity SHARED
     src/core/config.cpp
     src/core/crash.cpp
     src/core/d3d_debug.cpp
-    src/core/proxy_version.cpp
-    src/core/proxy_version.asm
-    src/core/version.def
+    src/core/proxy_dinput8.cpp
+    src/core/proxy_dinput8.asm
+    src/core/dinput8.def
     src/hooks/present.cpp
     src/renderer/dlss_pass.cpp
     src/renderer/gpu.cpp
@@ -86,7 +86,7 @@ add_library(catalyst_clarity SHARED
     src/upscaler/dlss.cpp
     src/ui/input.cpp
     src/ui/overlay.cpp)
-set_target_properties(catalyst_clarity PROPERTIES OUTPUT_NAME version)
+set_target_properties(catalyst_clarity PROPERTIES OUTPUT_NAME dinput8)
 target_include_directories(catalyst_clarity PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${DLSS_SDK_DIR}/include)
 target_compile_definitions(catalyst_clarity PRIVATE
     CS_VERSION="${PROJECT_VERSION}" WIN32_LEAN_AND_MEAN NOMINMAX UNICODE _UNICODE)

@@ -1,5 +1,9 @@
-// Entry point. DllMain only sets up the version.dll proxy and starts init_thread; everything else
+// Entry point. DllMain only sets up the dinput8.dll proxy and starts init_thread; everything else
 // runs there, outside the loader lock.
+//
+// Why dinput8.dll: releases up to 0.2.1 were a version.dll proxy, but the EA app's in-game overlay
+// loads System32\version.dll into the game before the game asks for it, so the game folder's copy
+// was never loaded. Nothing loads dinput8.dll before the game does.
 //
 // Timing: the game's code is not in its final form when the process starts. DXGI hooks wait for the
 // game to load d3d11.dll; hooks on game code also wait until the target bytes match the expected
@@ -41,6 +45,18 @@ static bool is_game_process() {
     return _wcsicmp(name.c_str(), L"MirrorsEdgeCatalyst.exe") == 0;
 }
 
+// True when a version.dll from our own folder is loaded: the proxy of a release up to 0.2.1, left
+// behind on update. It runs the mod itself, so this copy must not install a second set of hooks.
+static bool old_proxy_loaded(const std::wstring& dir) {
+    HMODULE old = GetModuleHandleW(L"version.dll");
+    if (!old)
+        return false;
+    wchar_t path[MAX_PATH];
+    DWORD n = GetModuleFileNameW(old, path, MAX_PATH);
+    std::wstring s(path, n);
+    return _wcsicmp(s.substr(0, s.find_last_of(L"\\/") + 1).c_str(), dir.c_str()) == 0;
+}
+
 static void read_game_build() {
     auto base = reinterpret_cast<uintptr_t>(GetModuleHandleW(nullptr));
     auto dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(base);
@@ -71,6 +87,12 @@ static DWORD WINAPI init_thread(LPVOID) {
     while (!GetModuleHandleW(L"d3d11.dll"))
         Sleep(20);
     logf("d3d11.dll loaded after %llu ms", GetTickCount64() - start);
+
+    // By now the game has loaded version.dll too, if it loads the old proxy at all.
+    if (old_proxy_loaded(dir)) {
+        logf("version.dll from an older Catalyst Clarity release is loaded: delete it from the game folder");
+        return 0;
+    }
 
     g_state.hooks_installed = install_present_hooks();
     d3d_debug::install();  // before the game creates its device (seconds later)

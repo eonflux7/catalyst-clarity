@@ -40,7 +40,7 @@ static void NVSDK_CONV ngx_log(const char* message, NVSDK_NGX_Logging_Level, NVS
 }
 
 // True when the module's version resource says OptiScaler; fills the file version. Reads the resource
-// directly: GetFileVersionInfo lives in version.dll, which is us.
+// directly: GetFileVersionInfo would make the mod import version.dll.
 static bool is_optiscaler(HMODULE module, char* version, size_t version_size) {
     HRSRC res = FindResourceW(module, MAKEINTRESOURCEW(1), RT_VERSION);
     HGLOBAL data = res ? LoadResource(module, res) : nullptr;

@@ -2,7 +2,7 @@
 
 | Component | Use | License |
 |---|---|---|
-| [NVIDIA DLSS SDK](https://github.com/NVIDIA/DLSS) v310.9.1 | NGX headers and static library linked into `version.dll`; `nvngx_dlss.dll` shipped in the release zip | NVIDIA RTX SDKs license (`LICENSE.txt` in the SDK, `catalyst_clarity_licenses/nvidia-dlss-sdk.txt` in the zip) |
+| [NVIDIA DLSS SDK](https://github.com/NVIDIA/DLSS) v310.9.1 | NGX headers and static library linked into `dinput8.dll`; `nvngx_dlss.dll` shipped in the release zip | NVIDIA RTX SDKs license (`LICENSE.txt` in the SDK, `catalyst_clarity_licenses/nvidia-dlss-sdk.txt` in the zip) |
 | [Dear ImGui](https://github.com/ocornut/imgui) v1.91.5 | in-game overlay | MIT |
 | [MinHook](https://github.com/TsudaKageyu/minhook) v1.3.3 | function hooks | BSD 2-Clause |
 | [AMD FidelityFX FSR 1](https://github.com/GPUOpen-Effects/FidelityFX-FSR) | RCAS sharpening shader, adapted (`src/renderer/rcas_ps.h`) | MIT (`licenses/amd-fidelityfx-fsr1.txt`) |

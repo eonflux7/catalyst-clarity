@@ -2,9 +2,13 @@ Catalyst Clarity - NVIDIA DLSS for Mirror's Edge Catalyst (Steam)
 https://github.com/eonflux7/catalyst-clarity
 
 INSTALL
-  Extract everything into the game folder, next to MirrorsEdgeCatalyst.exe, e.g.
-  C:\Program Files (x86)\Steam\steamapps\common\Mirrors Edge Catalyst
-  Start the game. DLSS Quality is on by default. Press F8 for the settings menu.
+  1. Updating from 0.2.1 or older? Delete version.dll from the game folder.
+     The mod is now dinput8.dll.
+  2. Extract everything into the game folder, next to MirrorsEdgeCatalyst.exe, e.g.
+     C:\Program Files (x86)\Steam\steamapps\common\Mirrors Edge Catalyst
+  3. Linux (Steam / Proton) only: set the game's launch options to
+     WINEDLLOVERRIDES="dinput8=n,b" %command%
+  4. Start the game. DLSS Quality is on by default. Press F8 for the settings menu.
 
 REQUIREMENTS
   NVIDIA RTX GPU with a current driver, Windows 10/11. AMD / Intel GPUs: experimental, use
@@ -21,7 +25,7 @@ SETTINGS
   [dlss] sharpness        0-100 (RCAS sharpening, 0 = off)
 
 UNINSTALL
-  Delete version.dll, nvngx_dlss.dll, catalyst_clarity.ini, catalyst_clarity.log,
+  Delete dinput8.dll, nvngx_dlss.dll, catalyst_clarity.ini, catalyst_clarity.log,
   catalyst_clarity_README.txt and the catalyst_clarity_licenses folder.
 
 PROBLEMS
