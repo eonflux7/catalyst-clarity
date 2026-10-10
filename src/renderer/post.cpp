@@ -21,14 +21,29 @@ struct Signature {
 constexpr Signature kMotionBlur{0x35c16da, 0x3745d6e};
 constexpr Signature kTonemap{0x35bf90c, 0x37468a0};
 constexpr Signature kLdr2{0x35c0a5e, 0x3747ec4};
-constexpr Signature kResample{0x35c3524, 0x374809b};
+// RenderScaleResample: the post function switches on WorldRenderSettings.RenderScaleResampleMode, which
+// Post Process Quality sets (Low = Linear, Medium to Ultra = BicubicSharp, Hyper = LanczosSeparable; the
+// rest only through User.cfg). One call site per mode; the separable modes draw twice, horizontally into
+// an engine intermediate and then vertically onto the swapchain.
+constexpr Signature kResample[] = {
+    {0x35c8b57, 0x37481fe},  // Point, Linear
+    {0x35c3524, 0x3748077},  // Bicubic
+    {0x35c3524, 0x374808c},  // Lanczos
+    {0x35c3524, 0x374809b},  // BicubicSharp
+    {0x35c3524, 0x3748128},  // LanczosSeparable, vertical
+    {0x35c3524, 0x37481a5},  // BicubicSharpSeparable, vertical
+};
+constexpr Signature kResampleFirst[] = {
+    {0x35c3524, 0x37480ce},  // LanczosSeparable, horizontal
+    {0x35c3524, 0x3748152},  // BicubicSharpSeparable, horizontal
+};
 // Map screen only: LDR depth of field composite, alpha-blended onto the LDR target (blend state:
 // colour SrcAlpha/InvSrcAlpha, alpha Zero/One, depth off).
 constexpr Signature kDof{0x35bcacb, 0x35bff15};
 constexpr int kStackDepth = 12;
 constexpr int kMaxSrvs = 16;
 
-enum class Pass { Other, MotionBlur, Tonemap, Ldr2, Dof, Resample };
+enum class Pass { Other, MotionBlur, Tonemap, Ldr2, Dof, Resample, ResampleFirst };
 
 struct Target {
     ID3D11Texture2D* tex = nullptr;
@@ -217,8 +232,12 @@ static Pass identify() {
             return Pass::Tonemap;
         if (at(i, kLdr2))
             return Pass::Ldr2;
-        if (at(i, kResample))
-            return Pass::Resample;
+        for (const Signature& sig : kResample)
+            if (at(i, sig))
+                return Pass::Resample;
+        for (const Signature& sig : kResampleFirst)
+            if (at(i, sig))
+                return Pass::ResampleFirst;
         if (at(i, kDof))
             return Pass::Dof;
     }
@@ -537,6 +556,8 @@ static bool resample(ID3D11DeviceContext* ctx) {
     Frame& f = g_frame;
     if (!f.status.tonemap_done)
         return false;
+    if (f.status.resample_done)
+        return fail("resample signature matched twice in one frame");
     Saved saved(ctx);
     ID3D11RenderTargetView* swap_rtv = saved.rtvs[0];
     if (!swap_rtv)
@@ -580,7 +601,8 @@ bool on_draw(ID3D11DeviceContext* ctx, UINT vertex_count, UINT start_vertex, Dra
     Pass pass = identify();
     if (pass != Pass::Other)
         d3d_debug::drain(ctx, "engine before post pass");
-    static const char* const kPassNames[] = {"other", "motion blur", "tonemap", "LDR2", "DoF composite", "resample"};
+    static const char* const kPassNames[] = {"other", "motion blur", "tonemap", "LDR2", "DoF composite", "resample",
+                                             "resample first pass"};
     if (pass != Pass::Other && g_frame.active)
         trace(kPassNames[static_cast<int>(pass)]);
     switch (pass) {
@@ -594,6 +616,8 @@ bool on_draw(ID3D11DeviceContext* ctx, UINT vertex_count, UINT start_vertex, Dra
                         "DoF composite does not write the LDR target",
                         &g_frame.status.dof_done);
     case Pass::Resample: return resample(ctx);
+    // Left to the engine: it only fills the intermediate that the second pass, replaced above, would read.
+    case Pass::ResampleFirst: return false;
     default: other_draw(ctx); return false;
     }
 }

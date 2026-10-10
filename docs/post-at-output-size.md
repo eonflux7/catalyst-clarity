@@ -30,8 +30,25 @@ one draw per frame, at any resolution scale:
 | Motion blur | `0x35c16da`, `0x3745d6e` |
 | Tonemap | `0x35bf90c`, `0x37468a0` |
 | Second LDR draw | `0x35c0a5e`, `0x3747ec4` |
-| RenderScaleResample | `0x35c3524`, `0x374809b` |
+| RenderScaleResample | one pair per resample mode, below |
 | Depth of field composite (map, slides) | `0x35bcacb`, `0x35bff15` |
+
+The resample is the exception to "one pair". The post function switches on
+`WorldRenderSettings.RenderScaleResampleMode` (`+0x2a4`, constructor default LanczosSeparable), and each mode has
+its own call site. The game's options script (`Scripts/UserOptions/Options/Graphics.lua` in `initfs_Win32`) sets
+the mode from Post Process Quality; the other modes are only reachable through `User.cfg`. The separable modes
+draw twice: horizontally from the render-size LDR target into an engine intermediate, then vertically onto the
+swapchain.
+
+| Mode | Post Process Quality | (pass, post) return RVAs |
+|---|---|---|
+| 0 Point | | `0x35c8b57`, `0x37481fe` |
+| 1 Linear | Low | `0x35c8b57`, `0x37481fe` |
+| 2 Bicubic | | `0x35c3524`, `0x3748077` |
+| 3 Lanczos | | `0x35c3524`, `0x374808c` |
+| 4 LanczosSeparable | Hyper | horizontal `0x35c3524`, `0x37480ce`; vertical `0x35c3524`, `0x3748128` |
+| 5 BicubicSharp | Medium, High, Ultra | `0x35c3524`, `0x374809b` |
+| 6 BicubicSharpSeparable | (consoles) | horizontal `0x35c3524`, `0x3748152`; vertical `0x35c3524`, `0x37481a5` |
 
 ## What reads what
 
@@ -67,6 +84,8 @@ Per frame, after DLSS has upscaled to an output-size image D:
    mid-frame, finds it filled.
 3. **RenderScaleResample** is skipped: L is copied to the swapchain and downsampled into the engine's render-size
    LDR target, which the UI background blur reads next.
+   In the separable modes the horizontal draw is left to the engine (it only fills the intermediate) and the
+   vertical draw is the one skipped.
 
 Anything unexpected falls back to the engine path for the rest of the frame.
 

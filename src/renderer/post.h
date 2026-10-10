@@ -16,7 +16,7 @@
 //     render-size LDR target is kept current by also running the engine's own draw into it (never refilled
 //     inside another engine draw: that hangs the GPU), and refilled at the resample (UI background blur). Bloom, distortion and the Runner's Vision mask stay render size and are
 //     upsampled by UV.
-//   RenderScaleResample (+0x374809b): skipped; L is copied to its swapchain target, and downsampled into
+//   RenderScaleResample (one call site per resample mode, post.cpp): skipped; L is copied to its swapchain target, and downsampled into
 //     the engine's render-size LDR target, which the UI background blur reads next.
 // Passes are recognised by the post function's return address on the stack, only between the
 // TAA draw and Present. Anything unexpected falls back to the engine path for the rest of the frame.
