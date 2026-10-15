@@ -1,5 +1,10 @@
 <p align="center"><img src=".github/banner.png" alt="Catalyst Clarity" width="100%"></p>
 
+<p align="center">
+  <a href="https://boosty.to/eonflux7/donate"><img src="https://img.shields.io/badge/Tip_on-Boosty-F15F2C?logo=boosty&logoColor=white" alt="Tip on Boosty"></a>
+  <a href="#support"><img src="https://img.shields.io/badge/Tip_in-USDT_(TRC20)-26A17B?logo=tether&logoColor=white" alt="Tip in USDT (TRC20)"></a>
+</p>
+
 NVIDIA DLSS for **Mirror's Edge Catalyst** (PC, Steam). Catalyst Clarity replaces the game's TAA with DLSS
 Super Resolution / DLAA and runs motion blur, tonemapping and the rest of post-processing at your output
 resolution, so you get a sharp image from a lower render resolution.
@@ -119,6 +124,15 @@ build.cmd dist      :: also dist\catalyst-clarity-<version>.zip
 
 CMake downloads Dear ImGui, MinHook and the required files of the NVIDIA DLSS SDK at configure time.
 `build\ngx\dev\nvngx_dlss.dll` is the development DLSS runtime with NVIDIA's on-screen debug overlay.
+
+## Support
+
+Catalyst Clarity is free and always will be. If it made the game look better for you and you'd like to say
+thanks, tips are welcome:
+
+- **[Boosty](https://boosty.to/eonflux7/donate)**: card payments. If your card isn't Russian, pay in USD or EUR,
+  not RUB, or the payment may be declined.
+- **USDT (TRC20, Tron network only)**: `TDvocTCy6ZC2HrqGVFQSDV1LP7mZVAZHFE`
 
 ## Credits and licenses
 
