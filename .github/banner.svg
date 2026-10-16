@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="300" viewBox="0 0 1200 300" shape-rendering="crispEdges" role="img" aria-labelledby="title description">
+  <title id="title">Catalyst Clarity</title>
+  <desc id="description">A red pixelated silhouette of a bob-haired woman with one hand raised to her hair beside a lowercase bitmap wordmark, with displaced scanlines and scattered glitch fragments on a transparent background.</desc>
+  <defs>
+    <!-- A two-pixel contour preserves the reference pose and the gap beneath the raised arm. -->
+    <path id="profile" d="M128 64h18v2h-18ZM124 66h26v2h-26ZM120 68h34v2h-34ZM118 70h38v2h-38ZM116 72h42v2h-42ZM114 74h44v2h-44ZM114 76h46v2h-46ZM112 78h50v2h-50ZM112 80h54v2h-54ZM110 82h58v2h-58ZM110 84h48v2h-48ZM168 84h2v2h-2ZM110 86h62v2h-62ZM110 88h54v2h-54ZM168 88h6v2h-6ZM110 90h64v2h-64ZM110 92h66v2h-66ZM110 94h52v2h-52ZM164 94h12v2h-12ZM110 96h66v2h-66ZM110 98h66v2h-66ZM110 100h52v2h-52ZM164 100h12v2h-12ZM112 102h50v2h-50ZM166 102h10v2h-10ZM112 104h50v2h-50ZM166 104h10v2h-10ZM112 106h52v2h-52ZM166 106h10v2h-10ZM114 108h50v2h-50ZM168 108h10v2h-10ZM114 110h44v2h-44ZM164 110h2v2h-2ZM168 110h10v2h-10ZM116 112h40v2h-40ZM168 112h10v2h-10ZM118 114h38v2h-38ZM170 114h10v2h-10ZM120 116h34v2h-34ZM170 116h10v2h-10ZM118 118h34v2h-34ZM170 118h10v2h-10ZM118 120h20v2h-20ZM170 120h12v2h-12ZM116 122h22v2h-22ZM170 122h12v2h-12ZM116 124h22v2h-22ZM172 124h10v2h-10ZM114 126h24v2h-24ZM172 126h12v2h-12ZM112 128h28v2h-28ZM172 128h12v2h-12ZM112 130h32v2h-32ZM172 130h12v2h-12ZM110 132h38v2h-38ZM172 132h14v2h-14ZM110 134h42v2h-42ZM174 134h12v2h-12ZM110 136h46v2h-46ZM174 136h12v2h-12ZM108 138h52v2h-52ZM174 138h14v2h-14ZM108 140h56v2h-56ZM176 140h12v2h-12ZM108 142h64v2h-64ZM174 142h14v2h-14ZM108 144h82v2h-82ZM108 146h82v2h-82ZM108 148h82v2h-82ZM108 150h84v2h-84ZM108 152h52v2h-52ZM164 152h28v2h-28ZM110 154h52v2h-52ZM170 154h20v2h-20ZM110 156h52v2h-52ZM110 158h52v2h-52ZM110 160h52v2h-52ZM110 162h52v2h-52ZM110 164h52v2h-52ZM112 166h48v2h-48ZM112 168h48v2h-48ZM112 170h48v2h-48ZM112 172h22v2h-22ZM136 172h24v2h-24ZM112 174h22v2h-22ZM136 174h24v2h-24ZM112 176h22v2h-22ZM136 176h24v2h-24ZM112 178h22v2h-22ZM136 178h24v2h-24ZM114 180h20v2h-20ZM136 180h24v2h-24ZM114 182h22v2h-22ZM138 182h22v2h-22ZM114 184h22v2h-22ZM138 184h24v2h-24ZM114 186h22v2h-22ZM138 186h24v2h-24ZM114 188h22v2h-22ZM140 188h24v2h-24ZM116 190h22v2h-22ZM140 190h24v2h-24ZM116 192h48v2h-48ZM116 194h48v2h-48ZM116 196h48v2h-48ZM116 198h48v2h-48ZM116 200h50v2h-50ZM116 202h50v2h-50ZM116 204h50v2h-50ZM116 206h52v2h-52ZM116 208h52v2h-52ZM116 210h52v2h-52ZM116 212h54v2h-54ZM118 214h52v2h-52ZM118 216h54v2h-54ZM118 218h54v2h-54ZM118 220h54v2h-54ZM118 222h56v2h-56ZM116 224h58v2h-58ZM116 226h58v2h-58ZM116 228h60v2h-60ZM116 230h60v2h-60ZM116 232h60v2h-60Z"/>
+    <mask id="profile-signal" maskUnits="userSpaceOnUse" x="80" y="54" width="140" height="188" style="mask-type:luminance">
+      <path fill="white" d="M80 54H220V242H80Z"/>
+      <path fill="black" d="M96 88H208V90H96ZM96 184H208V186H96Z"/>
+    </mask>
+    <clipPath id="profile-upper"><path d="M96 88H208V90H96Z"/></clipPath>
+    <clipPath id="profile-lower"><path d="M96 184H208V186H96Z"/></clipPath>
+    <clipPath id="profile-echo"><path d="M80 80H216V82H80ZM80 148H216V150H80ZM80 210H216V212H80Z"/></clipPath>
+    <!-- Eleven-column glyphs use a four-pixel grid at the native banner size. -->
+    <path id="c" d="M2 5h8v1h-8ZM1 6h10v1h-10ZM0 7h3v1h-3ZM0 8h2v1h-2ZM0 9h2v1h-2ZM0 10h2v1h-2ZM0 11h2v1h-2ZM0 12h2v1h-2ZM0 13h2v1h-2ZM1 14h10v1h-10ZM2 15h8v1h-8Z"/>
+    <path id="a" d="M2 5h7v1h-7ZM1 6h9v1h-9ZM8 7h3v1h-3ZM9 8h2v1h-2ZM2 9h9v1h-9ZM1 10h10v1h-10ZM0 11h3v1h-3ZM9 11h2v1h-2ZM0 12h2v1h-2ZM9 12h2v1h-2ZM0 13h3v1h-3ZM9 13h2v1h-2ZM1 14h10v1h-10ZM2 15h6v1h-6ZM9 15h2v1h-2Z"/>
+    <path id="t" d="M3 0h2v1h-2ZM3 1h2v1h-2ZM3 2h2v1h-2ZM3 3h2v1h-2ZM3 4h2v1h-2ZM0 5h9v1h-9ZM0 6h9v1h-9ZM3 7h2v1h-2ZM3 8h2v1h-2ZM3 9h2v1h-2ZM3 10h2v1h-2ZM3 11h2v1h-2ZM3 12h2v1h-2ZM3 13h2v1h-2ZM3 14h6v1h-6ZM4 15h4v1h-4Z"/>
+    <path id="l" d="M2 0h4v1h-4ZM2 1h4v1h-4ZM4 2h2v1h-2ZM4 3h2v1h-2ZM4 4h2v1h-2ZM4 5h2v1h-2ZM4 6h2v1h-2ZM4 7h2v1h-2ZM4 8h2v1h-2ZM4 9h2v1h-2ZM4 10h2v1h-2ZM4 11h2v1h-2ZM4 12h2v1h-2ZM4 13h2v1h-2ZM2 14h7v1h-7ZM2 15h7v1h-7Z"/>
+    <path id="y" d="M0 5h2v1h-2ZM9 5h2v1h-2ZM0 6h2v1h-2ZM9 6h2v1h-2ZM0 7h2v1h-2ZM9 7h2v1h-2ZM0 8h2v1h-2ZM9 8h2v1h-2ZM0 9h2v1h-2ZM9 9h2v1h-2ZM0 10h2v1h-2ZM9 10h2v1h-2ZM0 11h2v1h-2ZM9 11h2v1h-2ZM0 12h2v1h-2ZM9 12h2v1h-2ZM1 13h10v1h-10ZM2 14h6v1h-6ZM9 14h2v1h-2ZM9 15h2v1h-2ZM8 16h3v1h-3ZM1 17h9v1h-9ZM1 18h8v1h-8Z"/>
+    <path id="s" d="M2 5h9v1h-9ZM1 6h10v1h-10ZM0 7h3v1h-3ZM0 8h2v1h-2ZM0 9h8v1h-8ZM1 10h9v1h-9ZM8 11h3v1h-3ZM9 12h2v1h-2ZM8 13h3v1h-3ZM0 14h10v1h-10ZM0 15h9v1h-9Z"/>
+    <path id="r" d="M0 5h2v1h-2ZM4 5h5v1h-5ZM0 6h2v1h-2ZM3 6h7v1h-7ZM0 7h4v1h-4ZM8 7h3v1h-3ZM0 8h3v1h-3ZM9 8h2v1h-2ZM0 9h2v1h-2ZM0 10h2v1h-2ZM0 11h2v1h-2ZM0 12h2v1h-2ZM0 13h2v1h-2ZM0 14h2v1h-2ZM0 15h2v1h-2Z"/>
+    <path id="i" d="M4 1h2v1h-2ZM4 2h2v1h-2ZM2 5h4v1h-4ZM2 6h4v1h-4ZM4 7h2v1h-2ZM4 8h2v1h-2ZM4 9h2v1h-2ZM4 10h2v1h-2ZM4 11h2v1h-2ZM4 12h2v1h-2ZM4 13h2v1h-2ZM2 14h7v1h-7ZM2 15h7v1h-7Z"/>
+    <g id="wordmark">
+      <use href="#c" x="0"/>
+      <use href="#a" x="14"/>
+      <use href="#t" x="28"/>
+      <use href="#a" x="42"/>
+      <use href="#l" x="56"/>
+      <use href="#y" x="70"/>
+      <use href="#s" x="84"/>
+      <use href="#t" x="98"/>
+      <use href="#c" x="116"/>
+      <use href="#l" x="130"/>
+      <use href="#a" x="144"/>
+      <use href="#r" x="158"/>
+      <use href="#i" x="172"/>
+      <use href="#t" x="186"/>
+      <use href="#y" x="200"/>
+    </g>
+    <g id="lettering" transform="translate(178 110) scale(4)">
+      <use href="#wordmark"/>
+    </g>
+    <!-- Remove the original strips before drawing displaced copies. -->
+    <mask id="signal" maskUnits="userSpaceOnUse" x="140" y="100" width="920" height="100" style="mask-type:luminance">
+      <path fill="white" d="M140 100H1060V200H140Z"/>
+      <path fill="black" d="M242 134H562V138H242ZM630 150H1030V154H630ZM438 166H690V170H438Z"/>
+    </mask>
+    <clipPath id="slice-top"><path d="M242 134H562V138H242Z"/></clipPath>
+    <clipPath id="slice-middle"><path d="M630 150H1030V154H630Z"/></clipPath>
+    <clipPath id="slice-bottom"><path d="M438 166H690V170H438Z"/></clipPath>
+    <clipPath id="echo-bands"><path d="M150 130H1050V138H150ZM150 170H1050V178H150Z"/></clipPath>
+  </defs>
+  <g fill="#cd2027">
+    <g clip-path="url(#profile-echo)">
+      <use href="#profile" x="-6" opacity=".2"/>
+      <use href="#profile" x="-14" opacity=".08"/>
+    </g>
+    <use href="#profile" mask="url(#profile-signal)"/>
+    <g clip-path="url(#profile-upper)"><use href="#profile" x="4"/></g>
+    <g clip-path="url(#profile-lower)"><use href="#profile" x="-6"/></g>
+    <path opacity=".5" d="M102 98h6v2h-6ZM194 150h6v2h-6ZM176 212h8v2h-8Z"/>
+    <path opacity=".2" d="M102 82h4v2h-4ZM172 112h6v2h-6ZM110 228h6v2h-6ZM182 184h8v2h-8Z"/>
+  </g>
+  <g fill="#cd2027" transform="translate(64)">
+    <g clip-path="url(#echo-bands)">
+      <use href="#lettering" x="-20" opacity=".1"/>
+      <use href="#lettering" x="-8" opacity=".22"/>
+    </g>
+    <use href="#lettering" mask="url(#signal)"/>
+    <g clip-path="url(#slice-top)"><use href="#lettering" x="12"/></g>
+    <g clip-path="url(#slice-middle)"><use href="#lettering" x="-8"/></g>
+    <g clip-path="url(#slice-bottom)"><use href="#lettering" x="16"/></g>
+    <!-- Small signal fragments share the same four-pixel grid as the type. -->
+    <path opacity=".55" d="M162 142h8v4h-8ZM270 126h12v4h-12ZM378 118h4v4h-4ZM502 178h16v4h-16ZM614 126h8v4h-8ZM730 178h12v4h-12ZM874 118h4v4h-4ZM1018 158h12v4h-12Z"/>
+    <path opacity=".2" d="M150 150h4v4h-4ZM302 178h12v4h-12ZM410 110h8v4h-8ZM526 186h8v4h-8ZM654 142h4v4h-4ZM802 126h12v4h-12ZM950 178h8v4h-8ZM1038 134h8v4h-8Z"/>
+  </g>
+</svg>
